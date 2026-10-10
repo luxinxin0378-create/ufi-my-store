@@ -1,0 +1,55 @@
+﻿<script>
+    (() => {
+        const menuBox = collapseBtn_menu.nextElementSibling.querySelector('.collapse_box')
+
+        const btnRebootForEthernet = document.createElement('button')
+        btnRebootForEthernet.textContent = "转网口专用重启"
+        menuBox.appendChild(btnRebootForEthernet)
+
+        let clickCount = 0
+        let resetTimer = null
+
+        btnRebootForEthernet.onclick = async () => {
+            clickCount++
+
+            // 每次点击后 5 秒内没有继续点击，则重新计数
+            clearTimeout(resetTimer)
+            resetTimer = setTimeout(() => {
+                clickCount = 0
+                btnRebootForEthernet.textContent = "转网口专用重启"
+            }, 5000)
+
+            if (clickCount === 1) {
+                btnRebootForEthernet.textContent = "再次点击"
+                createToast("还需点击 2 次", "")
+                return
+            }
+
+            if (clickCount === 2) {
+                btnRebootForEthernet.textContent = "确认重启?"
+                createToast("再点击 1 次将立即硬重启", "pink")
+                return
+            }
+
+            if (clickCount >= 3) {
+                clearTimeout(resetTimer)
+
+                // 立即禁用按钮，避免重复触发
+                btnRebootForEthernet.disabled = true
+                btnRebootForEthernet.textContent = "正在硬重启..."
+
+                createToast("正在执行转网口专用硬重启...", "red")
+
+                try {
+                    await runShellWithRoot(
+                        "echo 1 > /proc/sys/kernel/sysrq && echo b > /proc/sysrq-trigger"
+                    )
+                } catch (e) {
+                    // sysrq-b 执行成功后设备会立即掉线，
+                    // 因此这里出现请求异常/断开连接通常是正常现象
+                    console.log("设备可能已执行硬重启:", e)
+                }
+            }
+        }
+    })();
+</script>
