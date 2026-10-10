@@ -1,0 +1,10 @@
+{
+  "download_url": "https://raw.githubusercontent.com/luxinxin0378-create/ufi-my-store/main/plugins",
+  "res": {
+    "code": 200,
+    "message": "success",
+    "data": {
+      "content": []
+    }
+  }
+}
