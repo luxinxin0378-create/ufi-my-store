@@ -1,0 +1,43 @@
+<script>
+(() => {
+    const changeNetwork = async (val) => {
+        const value = val.trim()
+        try {
+            const cookie = await login()
+            if (!cookie) {
+                createToast(t('login_failed_check_pwd'), 'red')
+                return null
+            }
+            let res = await (await postData(cookie, {
+                goformId: 'SET_BEARER_PREFERENCE',
+                BearerPreference: value.trim()
+            })).json()
+            if (res.result != 'success') {
+                createToast(t('toast_oprate_failed'), 'red')
+            }
+        } catch (e) {}
+    }
+
+    const btn = document.querySelector('button[data-i18n="btn_lock_cell"]')
+    if (btn) {
+        btn.addEventListener('click', () => {
+            setTimeout(async () => {
+                createToast("正在自动切换网络...",8000)
+                const netType = document.querySelector('#NET_TYPE')
+                if (netType) {
+                    const options = document.querySelectorAll('#NET_TYPE option')
+                    const curValue = netType.value
+                    if (options.length) {
+                        const net = Array.from(options).find(el => el.value != curValue)
+                        if (net) {
+                            await changeNetwork(net.value)
+                            await changeNetwork(curValue)
+                            createToast('切换成功!')
+                        }
+                    }
+                }
+            }, 1000);
+        })
+    }
+})()
+</script>

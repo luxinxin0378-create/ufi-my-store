@@ -1,0 +1,485 @@
+//<script>
+(async () => {
+    const MODAL_ID = 'kano_bm_modal'
+    const STYLE_ID = 'kano_bm_style'
+    const NAME = 'kano_low_battery'
+    const CONFIG_FILE = '/sdcard/kano_low_battery_config.conf'
+    const SH_FILE = '/sdcard/kano_low_battery.sh'
+    const LOG_FILE = '/sdcard/kano_low_battery_log.log'
+    const BOOT_SH_FILE = '/sdcard/ufi_tools_boot.sh'
+    const HOTSPOT_CFG_FILE = '/data/kano_softap_manager/config.json'
+
+    let CONFIG = {
+        enabled: false,
+        t: [
+            { level: 20, action: 'hotspot_off', enabled: true },
+            { level: 5, action: 'shutdown', enabled: true },
+        ]
+    }
+
+    const ACT = {
+        none: '无操作',
+        hotspot_off: '关闭热点',
+        hotspot_on: '打开热点',
+        shutdown: '关闭电源',
+        reboot: '重启',
+    }
+
+    // ─── shell script template ────────────────────────────────────────────────
+    // 生成后台 shell 脚本，独立于浏览器运行
+    const genScript = () => {
+        // 从配置生成条件判断代码
+        const rules = CONFIG.t
+            .filter(t => t.enabled && t.action !== 'none')
+            .map((t, i) => {
+                let actionCmd = ''
+                switch (t.action) {
+                    case 'shutdown': actionCmd = 'reboot -p'; break
+                    case 'reboot': actionCmd = 'reboot'; break
+                    case 'hotspot_off': actionCmd = 'cmd wifi stop-softap'; break
+                    case 'hotspot_on':
+                        // 从热点管理配置中读取参数
+                        actionCmd = `HCFG_FILE="${HOTSPOT_CFG_FILE}"
+          if [ -f "$HCFG_FILE" ]; then
+            H_SSID=$(awk -F'"' '/"ssid"/{print $4}' "$HCFG_FILE")
+            H_SEC=$(awk -F'"' '/"security"/{print $4}' "$HCFG_FILE")
+            H_PASS=$(awk -F'"' '/"password"/{print $4}' "$HCFG_FILE")
+            H_BAND=$(awk -F'"' '/"band"/{print $4}' "$HCFG_FILE")
+          fi
+          H_SSID=\${H_SSID:-KanoHotspot}
+          H_SEC=\${H_SEC:-wpa2}
+          H_PASS=\${H_PASS:-12345678}
+          H_BAND=\${H_BAND:-2}
+          cmd wifi start-softap "$H_SSID" "$H_SEC" "$H_PASS" -b "$H_BAND"`
+                        break
+                    default: return ''
+                }
+                return `
+    # 阈值${i + 1}: 电量≤${t.level}% → ${ACT[t.action]}
+    if [ "$CAPACITY" -le ${t.level} ] && [ "$TRIGGERED_${i}" != "1" ]; then
+      TRIGGERED_${i}=1
+      log "电量 $CAPACITY% ≤ ${t.level}%，执行: ${ACT[t.action]}"
+      ${actionCmd}
+    elif [ "$CAPACITY" -gt ${t.level} ] && [ "$TRIGGERED_${i}" = "1" ]; then
+      TRIGGERED_${i}=0
+      log "电量 $CAPACITY% > ${t.level}%，重置阈值${i + 1}"
+    fi`
+            })
+            .filter(Boolean)
+            .join('\n')
+
+        return `#!/system/bin/sh
+# kano auto generated: low battery manager
+CONFIG_FILE="${CONFIG_FILE}"
+LOG_FILE="${LOG_FILE}"
+CHECK_INTERVAL=30
+GRACE_SECONDS=60
+
+CAPACITY_PATH="/sys/class/power_supply/battery/capacity"
+
+rm -rf "$LOG_FILE"
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
+}
+
+log "低电量管理已启动 (PID=$$)"
+
+# 初始化触发状态
+${CONFIG.t.filter(t => t.enabled && t.action !== 'none').map((_, i) => `TRIGGERED_${i}=0`).join('\n')}
+
+# 启动安全期
+START_TIME=$(date +%s)
+
+check_battery() {
+    if [ ! -r "$CAPACITY_PATH" ]; then
+      log "无法读取电量"
+      return
+    fi
+    CAPACITY=$(cat "$CAPACITY_PATH" 2>/dev/null)
+    if [ -z "$CAPACITY" ]; then return; fi
+
+    NOW=$(date +%s)
+    ELAPSED=$((NOW - START_TIME))
+
+${rules}
+}
+
+while true; do
+    check_battery
+    sleep "$CHECK_INTERVAL"
+done
+`
+    }
+
+    // ─── helpers ──────────────────────────────────────────────────────────────
+    const checkRoot = async () => {
+        try {
+            const res = await runShellWithRoot('whoami')
+            return res.success && res.content.includes('root')
+        } catch { return false }
+    }
+
+    const uploadFile = async (filename, content, destPath) => {
+        try {
+            const file = new File([content], filename, { type: 'text/plain' })
+            const formData = new FormData()
+            formData.append('file', file)
+            const uploadRes = await (await fetch(`${KANO_baseURL}/upload_img`, {
+                method: 'POST', headers: common_headers, body: formData,
+            })).json()
+            if (uploadRes.url) {
+                const tempPath = `/data/data/com.minikano.f50_sms/files${uploadRes.url}`
+                const moveRes = await runShellWithRoot(`mv ${tempPath} ${destPath}`)
+                return moveRes.success
+            }
+            return false
+        } catch { return false }
+    }
+
+    const killProcessByName = async (processName) => {
+        const psResult = await runShellWithRoot(`ps -ef | grep "${processName}" | grep -v grep`)
+        const lines = psResult.content.trim().split('\n')
+        if (!lines[0]?.trim()) return
+        for (const line of lines) {
+            const pid = line.trim().split(/\s+/)[1]
+            if (pid && /^\d+$/.test(pid)) await runShellWithRoot(`kill ${pid}`)
+        }
+    }
+
+    // ─── hotspot status ──────────────────────────────────────────────────────
+    const getHotspotStatus = async () => {
+        try {
+            const r = await runShellWithRoot(`dumpsys wifi | awk '
+BEGIN { in_softap=0; enabled=0 }
+/^Dump of SoftApManager id=/ { in_softap=1; next }
+/^Dump of / && $0 !~ /^Dump of SoftApManager id=/ { in_softap=0 }
+in_softap && /current StateMachine mode: StartedState/ { enabled=1 }
+END { print enabled ? "true" : "false" }
+'`)
+            return String(r?.content ?? '').trim() === 'true'
+        } catch { return false }
+    }
+
+    const getHotspotCfg = async () => {
+        try {
+            const r = await runShellWithRoot(`timeout 2s awk '{print}' '${HOTSPOT_CFG_FILE}' 2>/dev/null || true`)
+            const raw = String(r?.content ?? '').trim()
+            if (!raw) return { ssid: 'KanoHotspot', security: 'wpa2', password: '12345678', band: '2' }
+            return { ssid: 'KanoHotspot', security: 'wpa2', password: '12345678', band: '2', ...JSON.parse(raw) }
+        } catch { return { ssid: 'KanoHotspot', security: 'wpa2', password: '12345678', band: '2' } }
+    }
+
+    // ─── config read/write ────────────────────────────────────────────────────
+    const getConfig = async () => {
+        if (!(await checkRoot())) return false
+        // 读取配置文件
+        const res = await runShellWithRoot(`timeout 2s awk '{print}' ${CONFIG_FILE} 2>/dev/null || true`)
+        if (res.success && res.content.trim()) {
+            try {
+                const j = JSON.parse(res.content.trim())
+                if (j.t) CONFIG.t = j.t
+            } catch { }
+        }
+        // 判断是否已安装到自启动
+        const res1 = await runShellWithRoot(`timeout 2s awk '{print}' ${BOOT_SH_FILE} 2>/dev/null || true`)
+        if (res1.success) {
+            CONFIG.enabled = res1.content.includes(NAME)
+        }
+    }
+
+    // ─── install / uninstall ──────────────────────────────────────────────────
+    const install = async () => {
+        if (!(await checkRoot())) {
+            return createToast('没有开启高级功能，无法使用！', 'red')
+        }
+        // 保存配置
+        const cfgJson = JSON.stringify({ t: CONFIG.t }, null, 2)
+        await runShellWithRoot(`timeout 2s printf '%s' '${cfgJson.replace(/'/g, "'\\''")}' > ${CONFIG_FILE}`)
+        // 上传脚本
+        if (!await uploadFile('kano_low_battery.sh', genScript(), SH_FILE)) {
+            return createToast('传输脚本文件失败！', 'red')
+        }
+        // 注册自启动
+        await runShellWithRoot(`grep -qxF '/system/bin/sh ${SH_FILE} &' ${BOOT_SH_FILE} || echo '/system/bin/sh ${SH_FILE} &' >> ${BOOT_SH_FILE}`)
+        // 杀旧进程 & 启动
+        await killProcessByName(NAME)
+        await runShellWithRoot(`/system/bin/sh ${SH_FILE} &`)
+        CONFIG.enabled = true
+        createToast('已启用并设为自启动，后台运行中')
+    }
+
+    const uninstall = async () => {
+        if (!(await checkRoot())) {
+            return createToast('没有开启高级功能，无法使用！', 'red')
+        }
+        await runShellWithRoot(`sed -i '/${NAME}/d' ${BOOT_SH_FILE}`)
+        await runShellWithRoot(`rm -rf ${CONFIG_FILE} ${SH_FILE} ${LOG_FILE}`)
+        await killProcessByName(NAME)
+        CONFIG.enabled = false
+        createToast('脚本已停用')
+    }
+
+    // ─── style ────────────────────────────────────────────────────────────────
+    const injectStyle = () => {
+        if (document.getElementById(STYLE_ID)) return
+        const s = document.createElement('style')
+        s.id = STYLE_ID
+        s.textContent = `
+#${MODAL_ID} .bm-wrap{display:flex;flex-direction:column;gap:12px}
+#${MODAL_ID} .bm-card{border-radius:14px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+#${MODAL_ID} .bm-row{display:flex;align-items:center;gap:10px}
+#${MODAL_ID} .bm-row span.lbl{font-size:.7rem;opacity:.75;flex-shrink:0;min-width:3.5em}
+#${MODAL_ID} .bm-row .val{font-weight:700;font-size:.82rem;min-width:2.8em;text-align:right;flex-shrink:0}
+#${MODAL_ID} input[type=range]{flex:1;accent-color:#4ddb8a;height:4px}
+#${MODAL_ID} select{padding:7px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;width:100%;font-size:.78rem;outline:none}
+#${MODAL_ID} .sw{position:relative;display:inline-block;width:38px;height:22px;flex-shrink:0}
+#${MODAL_ID} .sw input{opacity:0;width:0;height:0}
+#${MODAL_ID} .sw-sl{position:absolute;inset:0;background:#444;border-radius:999px;cursor:pointer;transition:.25s}
+#${MODAL_ID} .sw-sl:before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.25s}
+#${MODAL_ID} .sw input:checked+.sw-sl{background:#4ddb8a}
+#${MODAL_ID} .sw input:checked+.sw-sl:before{transform:translateX(16px)}
+#${MODAL_ID} .bm-info{text-align:center;font-size:.72rem;padding:8px;border-radius:10px;background:rgba(77,219,138,.08);border:1px solid rgba(77,219,138,.2)}
+#${MODAL_ID} .bm-head{display:flex;align-items:center;justify-content:space-between}
+#${MODAL_ID} .bm-title{font-weight:700;font-size:.8rem}
+#${MODAL_ID} .bm-ctl{border-radius:14px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);padding:12px 14px}
+#${MODAL_ID} .bm-ctl-title{font-weight:700;font-size:.78rem;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+#${MODAL_ID} .bm-ctl-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid rgba(255,255,255,.06)}
+#${MODAL_ID} .bm-ctl-row:first-of-type{border-top:none}
+#${MODAL_ID} .bm-ctl-label{font-size:.72rem;font-weight:600}
+#${MODAL_ID} .bm-ctl-info{font-size:.58rem;opacity:.45;margin-top:2px}
+#${MODAL_ID} .bm-ctl-right{display:flex;align-items:center;gap:8px}
+#${MODAL_ID} .bm-st{font-size:.62rem;padding:2px 8px;border-radius:999px;font-weight:600}
+#${MODAL_ID} .bm-st.on{color:#9dffbf;background:rgba(60,201,120,.16)}
+#${MODAL_ID} .bm-st.off{color:#ffb3b3;background:rgba(255,82,82,.16)}
+#${MODAL_ID} .bm-st.unk{color:#ffd08a;background:rgba(255,173,51,.12)}
+#${MODAL_ID} .bm-pwr-row{display:flex;gap:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)}
+#${MODAL_ID} .bm-pwr-btn{flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;font-size:.75rem;font-weight:700;cursor:pointer;text-align:center;transition:.18s}
+#${MODAL_ID} .bm-pwr-btn:active{transform:scale(.96);background:rgba(255,255,255,.12)}
+#${MODAL_ID} .bm-pwr-btn.danger{border-color:rgba(255,82,82,.3);color:#ffb3b3}
+#${MODAL_ID} .bm-help-btn{width:22px;height:22px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff;font-size:.7rem;font-weight:700;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:.18s}
+#${MODAL_ID} .bm-help-btn:active{background:rgba(255,255,255,.14)}
+#${MODAL_ID} .bm-help{display:none;font-size:.62rem;line-height:1.65;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);margin-top:8px}
+#${MODAL_ID} .bm-help.on{display:block}
+#${MODAL_ID} .bm-help h4{font-size:.68rem;margin:8px 0 4px;opacity:.85}
+#${MODAL_ID} .bm-help h4:first-child{margin-top:0}
+#${MODAL_ID} .bm-help .ex{padding:6px 8px;border-radius:8px;background:rgba(77,219,138,.06);border:1px solid rgba(77,219,138,.12);margin:4px 0 6px}`
+        document.head.appendChild(s)
+    }
+
+    // ─── device control ──────────────────────────────────────────────────────
+    const renderCtl = async () => {
+        const root = document.querySelector(`#${MODAL_ID}`)
+        if (!root) return
+        const stEl = root.querySelector('#bm_hotspot_st')
+        const swEl = root.querySelector('#bm_hotspot_sw')
+        const refBtn = root.querySelector('#bm_hotspot_refresh')
+        if (!stEl || !swEl) return
+        // 显示加载中，禁用开关和刷新按钮
+        stEl.className = 'bm-st unk'
+        stEl.textContent = '检测中...'
+        swEl.disabled = true
+        if (refBtn) refBtn.disabled = true
+        const on = await getHotspotStatus()
+        swEl.checked = on
+        swEl.disabled = false
+        if (refBtn) refBtn.disabled = false
+        stEl.className = 'bm-st ' + (on ? 'on' : 'off')
+        stEl.textContent = on ? '已开启' : '已关闭'
+    }
+
+    window.bmCtlHotspot = async (checked) => {
+        if (!checked) {
+            if (!confirm('关闭热点后，已连接的设备将断开连接。\n开启会自动读取 热点管理插件 的内容\n确定要关闭吗？')) {
+                const swEl = document.querySelector('#bm_hotspot_sw')
+                if (swEl) swEl.checked = true
+                return
+            }
+        }
+        const stEl = document.querySelector('#bm_hotspot_st')
+        if (stEl) { stEl.className = 'bm-st unk'; stEl.textContent = '...' }
+        if (checked) {
+            const hcfg = await getHotspotCfg()
+            await runShellWithRoot(`cmd wifi start-softap ${hcfg.ssid} ${hcfg.security} ${hcfg.password} -b ${hcfg.band}`)
+        } else {
+            await runShellWithRoot('cmd wifi stop-softap')
+        }
+        await new Promise(r => setTimeout(r, 1500))
+        await renderCtl()
+        createToast(checked ? '热点 已开启' : '热点 已关闭')
+    }
+
+    window.bmCtlReboot = async () => {
+        if (!confirm('确定要重启设备？')) return
+        createToast('正在重启...', 'red')
+        await runShellWithRoot('reboot')
+    }
+
+    window.bmCtlShutdown = async () => {
+        if (!confirm('确定要关机？')) return
+        createToast('正在关机...', 'red')
+        await runShellWithRoot('reboot -p')
+    }
+
+    // ─── render ───────────────────────────────────────────────────────────────
+    const cardHtml = (t, i) => {
+        const actOpts = Object.entries(ACT)
+            .map(([k, v]) => `<option value="${k}"${t.action === k ? ' selected' : ''}>${v}</option>`)
+            .join('')
+        return `<div class="bm-card">
+  <div class="bm-head">
+    <span class="bm-title">阈值 ${i + 1}</span>
+    <label class="sw"><input type="checkbox" ${t.enabled ? 'checked' : ''} onchange="bmTog(${i},this.checked)"><span class="sw-sl"></span></label>
+  </div>
+  <div class="bm-row">
+    <span class="lbl">电量 ≤</span>
+    <input type="range" min="1" max="60" value="${t.level}" oninput="bmLv(${i},this.value)">
+    <span class="val" id="bm_lv${i}">${t.level}%</span>
+  </div>
+  <div>
+    <div style="font-size:.68rem;opacity:.7;margin-bottom:4px">触发动作</div>
+    <select onchange="bmAct(${i},this.value)">${actOpts}</select>
+  </div>
+</div>`
+    }
+
+    const renderBody = () => {
+        const root = document.querySelector(`#${MODAL_ID}`)
+        if (!root) return
+        const wrap = root.querySelector('#bm_wrap')
+        if (!wrap) return
+
+        const statusText = CONFIG.enabled ? '✅ 后台运行中' : '❌ 未启用'
+
+        wrap.innerHTML = `
+<div class="bm-ctl">
+    <div class="bm-ctl-title">📡 设备控制</div>
+    <div class="bm-ctl-row">
+        <div>
+            <div class="bm-ctl-label">WiFi 热点</div>
+            <div class="bm-ctl-info">Root Shell 控制</div>
+        </div>
+        <div class="bm-ctl-right">
+            <span class="bm-st unk" id="bm_hotspot_st">点击右边刷新</span>
+            <button id="bm_hotspot_refresh" onclick="bmCtlRefresh()" style="padding:2px 8px;font-size:.65rem;border-radius:8px;opacity:.8">刷新</button>
+            <label class="sw"><input type="checkbox" id="bm_hotspot_sw" disabled onchange="bmCtlHotspot(this.checked)"><span class="sw-sl"></span></label>
+        </div>
+    </div>
+    <div class="bm-pwr-row">
+        <div class="bm-pwr-btn" onclick="bmCtlReboot()">🔄 重启</div>
+        <div class="bm-pwr-btn danger" onclick="bmCtlShutdown()">⏻ 关机</div>
+    </div>
+</div>
+
+<div class="bm-row bm-head" style="padding:0 2px">
+    <div style="display:flex;align-items:center;gap:6px">
+        <span class="bm-title">低电量保护</span>
+        <div class="bm-help-btn" onclick="bmHelp()">?</div>
+    </div>
+</div>
+<div class="bm-help" id="bm_help_box">
+    <h4>📖 规则说明</h4>
+    • 后台 Shell 脚本每 <b>30秒</b>检测一次电量<br>
+    • <b>独立于浏览器</b>运行，关闭网页/换浏览器不受影响<br>
+    • 电量 <b>≤ 阈值</b> 时触发动作，<b>仅执行一次</b><br>
+    • 电量回升超过阈值后自动重置，再降到时再次触发<br>
+    • 开机后 <b>60秒安全期</b>：关机/重启被禁止，防循环<br>
+    • 提交后自动注册为<b>开机自启动</b>
+
+    <h4>💡 场景举例</h4>
+    <div class="ex">
+        设置：阈值1 = 20% 关热点，阈值2 = 5% 关机<br><br>
+        ▶ 电量 25% → 19%：触发"关热点" ✅<br>
+        ▶ 继续降到 4%：触发"关机" ✅<br>
+        ▶ 充电开机到 10%：60秒内不关机 ✅<br>
+        ▶ 60秒后电量仍 10%：10% > 5%，触发重置<br>
+        ▶ 放置耗电到 4%：再次触发"关机" ✅
+    </div>
+</div>
+<div class="bm-info" id="bm_lvtxt">${statusText}</div>
+${CONFIG.t.map(cardHtml).join('')}
+<div style="display:flex;gap:8px">
+    <button onclick="bmSubmit()" style="flex:1">提交</button>
+    <button onclick="bmUninstall()" style="flex:1;font-size:.75rem;opacity:.7">停用</button>
+</div>
+<div style="box-sizing:border-box;margin-top:6px">
+    <div style="font-size:.7rem;opacity:.7;margin-bottom:4px">后台日志</div>
+    <textarea id="bm_log" disabled style="margin-bottom:0;border:none;box-sizing:border-box;width:100%;min-height:80px;font-size:.65rem;background:rgba(0,0,0,.3);color:#ccc;border-radius:8px;padding:8px"></textarea>
+</div>`
+    }
+
+    const refreshLog = async () => {
+        const el = document.querySelector('#bm_log')
+        if (!el) return
+        const r = await runShellWithRoot(`tail -20 ${LOG_FILE} 2>/dev/null || echo "(暂无日志)"`)
+        el.value = String(r?.content ?? '').trim()
+    }
+
+    // ─── window functions ─────────────────────────────────────────────────────
+    window.bmCtlRefresh = () => { renderCtl() }
+    window.bmLv = (i, v) => {
+        CONFIG.t[i].level = Number(v)
+        const el = document.querySelector(`#bm_lv${i}`)
+        if (el) el.textContent = v + '%'
+    }
+    window.bmAct = (i, v) => { CONFIG.t[i].action = v }
+    window.bmTog = (i, v) => { CONFIG.t[i].enabled = v }
+    window.bmHelp = () => {
+        const el = document.querySelector('#bm_help_box')
+        if (el) el.classList.toggle('on')
+    }
+    window.bmSubmit = async () => {
+        await install()
+        renderBody()
+        renderCtl()          // 不 await，后台刷新热点状态
+        setTimeout(refreshLog, 2000)
+    }
+    window.bmUninstall = async () => {
+        if (!confirm('确定要停用低电量保护？')) return
+        await uninstall()
+        renderBody()
+    }
+    window.close_battery_manager = () => closeModal(`#${MODAL_ID}`)
+
+    // ─── mount ────────────────────────────────────────────────────────────────
+    injectStyle()
+    // 不在挂载阶段 await getConfig，避免按钮出现慢
+
+    let el = document.querySelector(`#${MODAL_ID}`)
+    if (!el) {
+        el = document.createElement('div')
+        el.id = MODAL_ID
+        el.classList.add('modal')
+        el.style.opacity = '1'
+        el.style.maxWidth = '380px'
+        el.style.width = '92%'
+        el.style.display = 'none'
+        el.innerHTML = `
+<div class="title" style="justify-content:space-between">
+    <span>低电量管理-小土豆</span>
+    <button onclick="close_battery_manager()" style="border-radius:50%;padding:0 8px">✕</button>
+</div>
+<div class="content" style="max-height:90%;overflow-y:auto;padding:12px 0">
+    <div class="bm-wrap" id="bm_wrap"></div>
+</div>
+<div class="btn" style="text-align:right;margin-top:6px">
+    <button type="button" onclick="close_battery_manager()">关闭</button>
+</div>`
+        document.querySelector('.container').appendChild(el)
+    }
+
+    const btn = document.createElement('button')
+    btn.textContent = '低电量管理'
+    btn.onclick = async () => {
+        // 1. 立即弹出弹窗（用当前 CONFIG 默认值先渲染）
+        showModal(`#${MODAL_ID}`)
+        renderBody()
+        // 2. 异步加载配置，加载完再刷新界面
+        await getConfig()
+        renderBody()
+        // 3. 日志异步加载，不阻塞显示
+        refreshLog()
+    }
+    document.querySelector('.actions-buttons').appendChild(btn)
+})();
+//</script>

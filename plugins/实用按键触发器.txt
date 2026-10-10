@@ -1,0 +1,466 @@
+//<script>
+(async () => {
+  const MODAL = 'kano_keyevent_modal';
+  const STYLE = 'kano_keyevent_style';
+  const ROOT = '/data/kano_keyevent';
+  const CONFIG = `${ROOT}/config.conf`;
+  const KEY_SH = `${ROOT}/key.sh`;
+  const SERVICE_SH = `${ROOT}/service.sh`;
+  const LOG = `${ROOT}/keyevent.log`;
+  const BOOT = '/sdcard/ufi_tools_boot.sh';
+  const BOOT_LINE = `${SERVICE_SH} start`;
+
+  const state = {
+    installed: false,
+    running: false,
+    boot: false,
+    devices: [],
+    config: {
+      DEV: '/dev/input/event0',
+      KEY_FILTER: '',
+      MODE: '',
+      MULTI_COUNT: '2',
+      DOUBLE_GAP_MS: '400',
+      LONG_PRESS_MS: '2000',
+      ACTION_CMD: 'sh /data/kano_softap_manager/service.sh start'
+    }
+  };
+
+  const esc = (v) => String(v ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+  const sq = (v) => `'${String(v ?? '').replace(/'/g, `'\\''`)}'`;
+  const run = async (cmd, timeout = 30000) => runShellWithRoot(cmd, timeout);
+  const okRoot = async () => {
+    const r = await run('whoami');
+    return String(r?.content || '').includes('root');
+  };
+
+  const ensureStyle = () => {
+    if (document.getElementById(STYLE)) return;
+    const s = document.createElement('style');
+    s.id = STYLE;
+    s.textContent = `
+      #${MODAL} .kk-wrap{display:flex;flex-direction:column;gap:12px;font-size:.74rem;}
+      #${MODAL} .kk-card{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);border-radius:14px;padding:12px;}
+      #${MODAL} .kk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+      #${MODAL} label{display:flex;flex-direction:column;gap:5px;font-size:.68rem;opacity:.92;}
+      #${MODAL} input,#${MODAL} select,#${MODAL} textarea{width:100%;box-sizing:border-box;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.18);color:inherit;padding:8px;font-size:.72rem;}
+      #${MODAL} textarea{min-height:190px;font-family:monospace;white-space:pre;}
+      #${MODAL} .kk-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+      #${MODAL} .kk-chip{display:inline-flex;padding:4px 9px;border-radius:999px;background:rgba(255,255,255,.08);font-size:.65rem;font-weight:700;}
+      #${MODAL} .kk-ok{color:#8ff0a7;background:rgba(78,214,118,.16);}
+      #${MODAL} .kk-bad{color:#ffaaaa;background:rgba(255,80,80,.16);}
+      #${MODAL} .kk-warn{color:#ffd08a;background:rgba(255,170,70,.16);}
+      #${MODAL} .kk-help{font-size:.65rem;line-height:1.7;opacity:.76;}
+      @media (max-width:720px){#${MODAL} .kk-grid{grid-template-columns:1fr;}#${MODAL}{width:94%!important;}}
+    `;
+    document.head.appendChild(s);
+  };
+
+  const parseConfig = (text) => {
+    const cfg = { ...state.config };
+    String(text || '').split('\n').forEach(line => {
+      line = line.trim();
+      if (!line || line.startsWith('#') || !line.includes('=')) return;
+      const i = line.indexOf('=');
+      const k = line.slice(0, i).trim();
+      let v = line.slice(i + 1).trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+      cfg[k] = v;
+    });
+    state.config = cfg;
+  };
+
+  const readStatus = async () => {
+    const r = await run(`
+      [ -x ${sq(SERVICE_SH)} ] && echo installed=1 || echo installed=0
+      if [ -f ${sq(ROOT + '/keyevent.pid')} ] && kill -0 "$(timeout 2s awk '{print}' ${sq(ROOT + '/keyevent.pid')} 2>/dev/null)" 2>/dev/null; then echo running=1; else echo running=0; fi
+      grep -qxF ${sq(BOOT_LINE)} ${sq(BOOT)} 2>/dev/null && echo boot=1 || echo boot=0
+      [ -f ${sq(CONFIG)} ] && timeout 2s awk '{print}' ${sq(CONFIG)}
+    `);
+    const text = String(r?.content || '');
+    state.installed = /installed=1/.test(text);
+    state.running = /running=1/.test(text);
+    state.boot = /boot=1/.test(text);
+    parseConfig(text);
+  };
+
+  const loadDevices = async () => {
+    const r = await run(`
+      for d in /dev/input/event*; do
+        [ -e "$d" ] || continue
+        n="$(timeout 1s getevent -lp "$d" 2>/dev/null | awk -F'"' '/name:/{print $2; exit}')"
+        [ -n "$n" ] || n="unknown"
+        printf '%s|%s\n' "$d" "$n"
+      done
+    `, 12000);
+    state.devices = String(r?.content || '').split('\n').map(x => x.trim()).filter(Boolean).map(x => {
+      const [dev, ...rest] = x.split('|');
+      return { dev, name: rest.join('|') || 'unknown' };
+    });
+    if (!state.devices.some(x => x.dev === state.config.DEV) && state.devices[0]) state.config.DEV = state.devices[0].dev;
+  };
+
+  const getForm = () => ({
+    DEV: document.querySelector('#kk_dev')?.value || state.config.DEV,
+    KEY_FILTER: document.querySelector('#kk_key')?.value.trim() || '',
+    MODE: document.querySelector('#kk_mode')?.value || '',
+    MULTI_COUNT: document.querySelector('#kk_count')?.value.trim() || '2',
+    DOUBLE_GAP_MS: document.querySelector('#kk_gap')?.value.trim() || '400',
+    LONG_PRESS_MS: document.querySelector('#kk_long')?.value.trim() || '2000',
+    ACTION_CMD: document.querySelector('#kk_action')?.value.trim() || ''
+  });
+
+  const validateCfg = (cfg) => {
+    if (!cfg.DEV.startsWith('/dev/input/event')) return '设备路径不合法';
+    if (cfg.MODE && !['single', 'multi', 'long'].includes(cfg.MODE)) return '触发模式不合法';
+    if (cfg.MODE === 'multi' && (!/^\d+$/.test(cfg.MULTI_COUNT) || Number(cfg.MULTI_COUNT) < 2)) return '连击次数至少为 2';
+    if (!/^\d+$/.test(cfg.DOUBLE_GAP_MS) || Number(cfg.DOUBLE_GAP_MS) < 50) return '连击间隔必须是毫秒整数';
+    if (!/^\d+$/.test(cfg.LONG_PRESS_MS) || Number(cfg.LONG_PRESS_MS) < 100) return '长按时间必须是毫秒整数';
+    return '';
+  };
+
+  const saveConfig = async () => {
+    const cfg = getForm();
+    const err = validateCfg(cfg);
+    if (err) return createToast(err, 'red');
+    const body = `DEV=${sq(cfg.DEV)}\nKEY_FILTER=${sq(cfg.KEY_FILTER)}\nMODE=${sq(cfg.MODE)}\nMULTI_COUNT=${sq(cfg.MULTI_COUNT)}\nDOUBLE_GAP_MS=${sq(cfg.DOUBLE_GAP_MS)}\nLONG_PRESS_MS=${sq(cfg.LONG_PRESS_MS)}\nACTION_CMD=${sq(cfg.ACTION_CMD)}\n`;
+    const r = await run(`mkdir -p ${sq(ROOT)} && printf %s ${sq(body)} > ${sq(CONFIG)} && chmod 666 ${sq(CONFIG)}`);
+    if (!r?.success) return createToast('保存配置失败', 'red');
+    state.config = cfg;
+    createToast('配置已保存', 'green');
+    await refresh();
+  };
+
+  const install = async () => {
+    if (!(await okRoot())) return createToast('请先启用高级功能/root', 'pink');
+    const r = await run(`
+mkdir -p ${sq(ROOT)}
+cat > ${sq(KEY_SH)} <<'KEYEOF'
+#!/system/bin/sh
+
+DEV="\${DEV:-/dev/input/event0}"
+KEY_FILTER="$1"
+MODE="$2"
+MULTI_COUNT="$3"
+ACTION_CMD="\${ACTION_CMD:-}"
+DOUBLE_GAP_MS="\${DOUBLE_GAP_MS:-400}"
+LONG_PRESS_MS="\${LONG_PRESS_MS:-2000}"
+LOG_FILE="\${LOG_FILE:-/data/kano_keyevent/keyevent.log}"
+
+down_time=0
+last_up_time=0
+tap_count=0
+
+log_line() {
+  printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" "$1" >> "$LOG_FILE"
+}
+
+run_action() {
+  [ -z "$KEY_FILTER" ] && return
+  [ -z "$MODE" ] && return
+  [ -z "$ACTION_CMD" ] && return
+  sh -c "$ACTION_CMD" >> "$LOG_FILE" 2>&1 &
+}
+
+now_ms() {
+  awk '{printf "%d\\n", $1 * 1000}' /proc/uptime
+}
+
+[ -e "$DEV" ] || { log_line "{\"error\":\"device_not_found\",\"dev\":\"$DEV\"}"; exit 1; }
+log_line "{\"type\":\"start\",\"dev\":\"$DEV\",\"key\":\"$KEY_FILTER\",\"mode\":\"$MODE\",\"count\":\"$MULTI_COUNT\"}"
+
+getevent -lt "$DEV" | while read -r line; do
+  case "$line" in
+    *EV_KEY*)
+      set -- $line
+      key="$4"
+      state="$5"
+
+      if [ -z "$KEY_FILTER" ] || [ -z "$MODE" ]; then
+        log_line "{\"type\":\"key\",\"key\":\"$key\",\"state\":\"$state\"}"
+        continue
+      fi
+
+      [ "$key" != "$KEY_FILTER" ] && continue
+      now="$(now_ms)"
+
+      case "$state" in
+        DOWN|00000001)
+          down_time="$now"
+          ;;
+        UP|00000000)
+          press_time=$((now - down_time))
+          case "$MODE" in
+            long)
+              if [ "$press_time" -ge "$LONG_PRESS_MS" ]; then
+                run_action
+                log_line "{\"type\":\"key\",\"key\":\"$key\",\"action\":\"long\",\"press_time_ms\":$press_time}"
+              fi
+              ;;
+            multi)
+              if [ -z "$MULTI_COUNT" ] || [ "$MULTI_COUNT" -lt 2 ] 2>/dev/null; then MULTI_COUNT=2; fi
+              if [ "$last_up_time" -eq 0 ] || [ $((now - last_up_time)) -gt "$DOUBLE_GAP_MS" ]; then
+                tap_count=1
+              else
+                tap_count=$((tap_count + 1))
+              fi
+              last_up_time="$now"
+              if [ "$tap_count" -eq "$MULTI_COUNT" ]; then
+                run_action
+                log_line "{\"type\":\"key\",\"key\":\"$key\",\"action\":\"multi\",\"count\":$tap_count}"
+                tap_count=0
+                last_up_time=0
+              fi
+              ;;
+            single)
+              run_action
+              log_line "{\"type\":\"key\",\"key\":\"$key\",\"action\":\"single\"}"
+              ;;
+            *)
+              log_line "{\"error\":\"unknown_mode\",\"mode\":\"$MODE\"}"
+              ;;
+          esac
+          ;;
+      esac
+      ;;
+  esac
+done
+KEYEOF
+
+cat > ${sq(SERVICE_SH)} <<'SVCEOF'
+#!/system/bin/sh
+ROOT="/data/kano_keyevent"
+CONFIG="$ROOT/config.conf"
+PID="$ROOT/keyevent.pid"
+LOG="$ROOT/keyevent.log"
+KEY_SH="$ROOT/key.sh"
+
+load_config() {
+  [ -f "$CONFIG" ] || return
+  . "$CONFIG"
+}
+
+is_running() {
+  [ -f "$PID" ] || return 1
+  p="$(awk '{print}' "$PID" 2>/dev/null)"
+  [ -n "$p" ] && kill -0 "$p" 2>/dev/null
+}
+
+start_service() {
+  mkdir -p "$ROOT"
+  touch "$LOG"
+  if is_running; then
+    echo "already running: $(awk '{print}' "$PID")"
+    return 0
+  fi
+  load_config
+  export DEV="\${DEV:-/dev/input/event0}"
+  export ACTION_CMD="\${ACTION_CMD:-}"
+  export DOUBLE_GAP_MS="\${DOUBLE_GAP_MS:-400}"
+  export LONG_PRESS_MS="\${LONG_PRESS_MS:-2000}"
+  export LOG_FILE="$LOG"
+  nohup sh "$KEY_SH" "$KEY_FILTER" "$MODE" "$MULTI_COUNT" >> "$LOG" 2>&1 &
+  echo $! > "$PID"
+  echo "started: $(awk '{print}' "$PID")"
+}
+
+stop_service() {
+  if is_running; then
+    p="$(awk '{print}' "$PID")"
+    kill "$p" 2>/dev/null
+    sleep 1
+    kill -9 "$p" 2>/dev/null
+    echo "stopped"
+  else
+    echo "not running"
+  fi
+  rm -f "$PID"
+}
+
+case "$1" in
+  start) start_service ;;
+  stop) stop_service ;;
+  restart) stop_service; start_service ;;
+  status) is_running && echo running || echo stopped ;;
+  *) echo "usage: $0 start|stop|restart|status" ;;
+esac
+SVCEOF
+
+[ -f ${sq(CONFIG)} ] || cat > ${sq(CONFIG)} <<'CFGEOF'
+DEV='/dev/input/event0'
+KEY_FILTER=''
+MODE=''
+MULTI_COUNT='2'
+DOUBLE_GAP_MS='400'
+LONG_PRESS_MS='2000'
+ACTION_CMD='sh /data/kano_softap_manager/service.sh start'
+CFGEOF
+
+touch ${sq(LOG)}
+chmod 777 ${sq(ROOT)} ${sq(KEY_SH)} ${sq(SERVICE_SH)} ${sq(CONFIG)} ${sq(LOG)}
+`, 30000);
+    if (!r?.success) return createToast('安装失败：' + esc(r?.content || ''), 'red', 5000);
+    createToast('安装完成', 'green');
+    await refresh();
+  };
+
+  const service = async (act) => {
+    if (!(await okRoot())) return createToast('请先启用高级功能/root', 'pink');
+    if (act !== 'stop') await saveConfig();
+    const r = await run(`${sq(SERVICE_SH)} ${act}`, 12000);
+    if (!r?.success) return createToast(`${act} 失败`, 'red');
+    createToast(String(r.content || `${act} ok`).trim(), 'green');
+    await refresh();
+    await loadLog();
+  };
+
+  const toggleBoot = async () => {
+    if (!(await okRoot())) return createToast('请先启用高级功能/root', 'pink');
+    const cmd = state.boot
+      ? `sed -i '/kano_keyevent/d' ${sq(BOOT)}`
+      : `touch ${sq(BOOT)} && grep -qxF ${sq(BOOT_LINE)} ${sq(BOOT)} || echo ${sq(BOOT_LINE)} >> ${sq(BOOT)}`;
+    const r = await run(cmd);
+    if (!r?.success) return createToast('修改开机自启失败', 'red');
+    createToast(state.boot ? '已取消开机自启' : '已设置开机自启', 'green');
+    await refresh();
+  };
+
+  let uninstallClicks = 0;
+  let uninstallTimer = null;
+  const uninstall = async () => {
+    if (!(await okRoot())) return createToast('请先启用高级功能/root', 'pink');
+    clearTimeout(uninstallTimer);
+    uninstallTimer = setTimeout(() => uninstallClicks = 0, 2500);
+    uninstallClicks++;
+    if (uninstallClicks < 2) return createToast('再点一次确认卸载并清理环境', 'pink');
+    uninstallClicks = 0;
+    await run(`${sq(SERVICE_SH)} stop 2>/dev/null; sed -i '/kano_keyevent/d' ${sq(BOOT)} 2>/dev/null; rm -rf ${sq(ROOT)}`);
+    createToast('已卸载并清理', 'green');
+    await refresh();
+  };
+
+  const loadLog = async () => {
+    const el = document.querySelector('#kk_log');
+    if (!el) return;
+    const r = await run(`[ -f ${sq(LOG)} ] && timeout 2s awk '{print}' ${sq(LOG)} | tail -n 120`, 5000);
+    el.value = String(r?.content || '');
+    el.scrollTop = el.scrollHeight;
+  };
+
+  const clearLog = async () => {
+    const r = await run(`mkdir -p ${sq(ROOT)} && : > ${sq(LOG)} && chmod 666 ${sq(LOG)}`);
+    if (!r?.success) return createToast('清空日志失败', 'red');
+    createToast('日志已清空', 'green');
+    await loadLog();
+  };
+
+  const render = () => {
+    const cfg = state.config;
+    const deviceOpts = state.devices.length
+      ? state.devices.map(x => `<option value="${esc(x.dev)}" ${x.dev === cfg.DEV ? 'selected' : ''}>${esc(x.dev)} - ${esc(x.name)}</option>`).join('')
+      : `<option value="${esc(cfg.DEV)}">${esc(cfg.DEV)}</option>`;
+    const modeOpts = [
+      ['', '测试模式（不执行，只记录 key）'],
+      ['single', '单击 single'],
+      ['multi', '连击 multi'],
+      ['long', '长按 long']
+    ].map(([v, t]) => `<option value="${v}" ${cfg.MODE === v ? 'selected' : ''}>${t}</option>`).join('');
+
+    return `
+      <div class="kk-wrap">
+        <div class="kk-card">
+          <div class="kk-row">
+            <span class="kk-chip ${state.installed ? 'kk-ok' : 'kk-bad'}">${state.installed ? '已安装' : '未安装'}</span>
+            <span class="kk-chip ${state.running ? 'kk-ok' : 'kk-warn'}">${state.running ? '运行中' : '未运行'}</span>
+            <span class="kk-chip ${state.boot ? 'kk-ok' : 'kk-warn'}">${state.boot ? '已自启' : '未自启'}</span>
+          </div>
+        </div>
+
+        <div class="kk-card kk-grid">
+          <label>监听设备<select id="kk_dev">${deviceOpts}</select></label>
+          <label>触发模式<select id="kk_mode">${modeOpts}</select></label>
+          <label>KeyCode<input id="kk_key" placeholder="留空=测试抓取，例如 KEY_VOLUMEUP" value="${esc(cfg.KEY_FILTER)}"></label>
+          <label>连击次数<input id="kk_count" type="number" min="2" value="${esc(cfg.MULTI_COUNT || '2')}"></label>
+          <label>连击间隔 ms<input id="kk_gap" type="number" min="50" value="${esc(cfg.DOUBLE_GAP_MS || '400')}"></label>
+          <label>长按时间 ms<input id="kk_long" type="number" min="100" value="${esc(cfg.LONG_PRESS_MS || '2000')}"></label>
+          <label style="grid-column:1/-1;">触发命令<input id="kk_action" placeholder="例如 sh /data/kano_softap_manager/service.sh start" value="${esc(cfg.ACTION_CMD)}"></label>
+        </div>
+
+        <div class="kk-card kk-help">
+          用法：选择设备 → 测试模式启动抓取 KeyCode → 填入 KeyCode 和模式 → 保存并启动。未填写 KeyCode 或未选择模式时，只记录日志，不执行命令。
+        </div>
+
+        <div class="kk-card">
+          <div class="kk-row">
+            <button id="kk_install">安装/修复</button>
+            <button id="kk_save">保存配置</button>
+            <button id="kk_start">启动</button>
+            <button id="kk_stop">停止</button>
+            <button id="kk_restart">重启</button>
+            <button id="kk_boot">${state.boot ? '取消自启' : '开机自启'}</button>
+            <button id="kk_uninstall">卸载</button>
+          </div>
+        </div>
+
+        <div class="kk-card">
+          <div class="kk-row" style="justify-content:space-between;margin-bottom:8px;">
+            <b>运行日志(请自行点击刷新)</b>
+            <span class="kk-row"><button id="kk_refresh_log">刷新</button><button id="kk_clear_log">清空</button></span>
+          </div>
+          <textarea id="kk_log" readonly></textarea>
+        </div>
+      </div>
+    `;
+  };
+
+  const bind = (el) => {
+    el.querySelector('#kk_install').onclick = install;
+    el.querySelector('#kk_save').onclick = saveConfig;
+    el.querySelector('#kk_start').onclick = () => service('start');
+    el.querySelector('#kk_stop').onclick = () => service('stop');
+    el.querySelector('#kk_restart').onclick = () => service('restart');
+    el.querySelector('#kk_boot').onclick = toggleBoot;
+    el.querySelector('#kk_uninstall').onclick = uninstall;
+    el.querySelector('#kk_refresh_log').onclick = loadLog;
+    el.querySelector('#kk_clear_log').onclick = clearLog;
+  };
+
+  const refresh = async () => {
+    await readStatus();
+    await loadDevices();
+    const box = document.querySelector(`#${MODAL} .content`);
+    const mod = document.querySelector(`#${MODAL}`);
+    if (box && mod) {
+      box.innerHTML = render();
+      bind(mod);
+      await loadLog();
+    }
+  };
+
+  const openModal = async () => {
+    ensureStyle();
+    let { close } = createFixedToast("kano_t_keyevent_loading", "初始化中...")
+    document.querySelector(`#${MODAL}`)?.remove();
+    await readStatus();
+    await loadDevices();
+    const { id, el } = createModal({
+      name: MODAL,
+      title: '实用按键触发器',
+      maxWidth: '760px',
+      contentStyle: "max-height: 600px;",
+      showConfirm: false,
+      onClose: () => true,
+      content: render()
+    });
+    bind(el);
+    showModal(id);
+    await loadLog();
+    close()
+  };
+
+  const mainBtn = document.createElement('button');
+  mainBtn.textContent = '按键触发器';
+  mainBtn.onclick = openModal;
+  document.querySelector('.actions-buttons')?.appendChild(mainBtn);
+})();
+//</script>

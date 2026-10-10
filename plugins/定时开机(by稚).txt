@@ -1,0 +1,620 @@
+<style>
+    #SCHEDULE_POWER_V2 .task-list {
+        max-height: 300px;
+        overflow-y: auto;
+        margin: 10px 0;
+    }
+    #SCHEDULE_POWER_V2 .task-item {
+        background: rgba(255,255,255,0.1);
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    #SCHEDULE_POWER_V2 .task-info {
+        flex: 1;
+    }
+    #SCHEDULE_POWER_V2 .task-time {
+        font-size: 18px;
+        font-weight: bold;
+    }
+    #SCHEDULE_POWER_V2 .task-days {
+        font-size: 12px;
+        color: #aaa;
+        margin-top: 4px;
+    }
+    #SCHEDULE_POWER_V2 .task-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    #SCHEDULE_POWER_V2 .task-switch {
+        position: relative;
+        width: 44px;
+        height: 24px;
+    }
+    #SCHEDULE_POWER_V2 .task-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    #SCHEDULE_POWER_V2 .task-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .3s;
+        border-radius: 24px;
+    }
+    #SCHEDULE_POWER_V2 .task-slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: .3s;
+        border-radius: 50%;
+    }
+    #SCHEDULE_POWER_V2 input:checked + .task-slider {
+        background-color: #4CAF50;
+    }
+    #SCHEDULE_POWER_V2 input:checked + .task-slider:before {
+        transform: translateX(20px);
+    }
+    #SCHEDULE_POWER_V2 .task-delete {
+        background: #f44336;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 4px 8px;
+        cursor: pointer;
+    }
+    #SCHEDULE_POWER_V2 .add-task-btn {
+        width: 100%;
+        padding: 10px;
+        background: #2196F3;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        margin-top: 10px;
+    }
+    #SCHEDULE_POWER_V2 .status-tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        margin-left: 10px;
+    }
+    #SCHEDULE_POWER_V2 .status-installed { background: #4CAF50; color: white; }
+    #SCHEDULE_POWER_V2 .status-not-installed { background: #f44336; color: white; }
+    #SCHEDULE_POWER_V2 .once-tag {
+        background: #FF9800;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        margin-left: 6px;
+    }
+    #SCHEDULE_POWER_V2 .weekday-selector {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin: 8px 0;
+    }
+    #SCHEDULE_POWER_V2 .weekday-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    #SCHEDULE_POWER_V2 .weekday-item input { width: 16px; height: 16px; }
+    #TASK_EDIT_MODAL {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+    }
+    #TASK_EDIT_MODAL .modal-content {
+        background: var(--dark-bg-color, #1a1a2e);
+        padding: 20px;
+        border-radius: 10px;
+        width: 90%;
+        max-width: 350px;
+    }
+</style>
+
+<script>
+(async () => {
+    const CONFIG_FILE = '/data/schedule_power_tasks.txt';
+    const BOOT_SCRIPT = '/sdcard/ufi_tools_boot.sh';
+    const SCRIPT_MARKER = '# UFI_SCHEDULE_POWER_V2';
+    const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
+
+    let isInstalled = false;
+    let tasks = [];
+
+    const mainHtml = `
+<div class="title" style="justify-content:space-between">
+    <span>定时开机 v2</span>
+    <span id="schedule_power_v2_status"></span>
+    <button onclick="showSchedulePowerV2Help()" style="border-radius: 50%">?</button>
+</div>
+<div class="content" style="max-height: 80%;font-size:14px;overflow-y: auto; padding-top: 10px;">
+    <div id="task_list" class="task-list"></div>
+    <button class="add-task-btn" onclick="addNewTask()">+ 添加任务</button>
+    <div style="display:flex;gap:10px;margin-top:15px">
+        <button onclick="installSchedulePowerV2()" style="flex:1">安装脚本</button>
+        <button onclick="uninstallSchedulePowerV2()" style="flex:1">卸载脚本</button>
+    </div>
+</div>
+<div class="btn" style="text-align: right;margin-top:6px;">
+    <button type="button" onclick="closeSchedulePowerV2()">关闭</button>
+</div>
+`;
+
+    // 检查root权限
+    const checkRoot = async () => {
+        try {
+            const res = await runShellWithRoot('whoami');
+            return res.success && res.content.includes('root');
+        } catch { return false; }
+    };
+
+    // 执行root命令
+    const exec = async (cmd) => {
+        try {
+            return await runShellWithRoot(cmd);
+        } catch (e) {
+            console.error('执行命令失败:', e);
+            return { success: false, content: '' };
+        }
+    };
+
+    // 检查脚本是否已安装
+    const checkInstalled = async () => {
+        const res = await exec(`cat ${BOOT_SCRIPT}`);
+        isInstalled = res.success && res.content.includes(SCRIPT_MARKER);
+        return isInstalled;
+    };
+
+    // 更新状态显示
+    const updateStatus = () => {
+        const el = document.getElementById('schedule_power_v2_status');
+        if (el) {
+            el.innerHTML = isInstalled 
+                ? '<span class="status-tag status-installed">已安装</span>'
+                : '<span class="status-tag status-not-installed">未安装</span>';
+        }
+    };
+
+    // 任务格式: id|time|weekdays|once|enabled
+    // weekdays: 逗号分隔的星期，空表示每天
+    // once: 1=只一次, 0=重复
+    // enabled: 1=启用, 0=禁用
+    const loadTasks = async () => {
+        const res = await exec(`cat ${CONFIG_FILE} 2>/dev/null`);
+        tasks = [];
+        if (res.success && res.content) {
+            res.content.trim().split('\n').forEach(line => {
+                if (!line.trim()) return;
+                const parts = line.split('|');
+                if (parts.length >= 5) {
+                    tasks.push({
+                        id: parts[0],
+                        time: parts[1],
+                        weekdays: parts[2] ? parts[2].split(',').map(d => parseInt(d)) : [],
+                        once: parts[3] === '1',
+                        enabled: parts[4] === '1'
+                    });
+                }
+            });
+        }
+    };
+
+    const saveTasks = async () => {
+        const lines = tasks.map(t => 
+            `${t.id}|${t.time}|${t.weekdays.join(',')}|${t.once ? '1' : '0'}|${t.enabled ? '1' : '0'}`
+        ).join('\n');
+        await exec(`echo "${lines}" > ${CONFIG_FILE}`);
+    };
+
+    // 计算任务的下次触发时间戳
+    const calcNextTs = (task) => {
+        if (!task.enabled) return null;
+        
+        const [hours, minutes] = task.time.split(':').map(Number);
+        const now = new Date();
+        
+        if (task.once) {
+            // 一次性任务：今天或明天
+            const today = new Date(now);
+            today.setHours(hours, minutes, 0, 0);
+            if (today > now) {
+                return Math.floor(today.getTime() / 1000);
+            }
+            // 今天已过，设为明天
+            today.setDate(today.getDate() + 1);
+            return Math.floor(today.getTime() / 1000);
+        } else {
+            // 重复任务
+            const weekdays = task.weekdays.length > 0 ? task.weekdays : [0,1,2,3,4,5,6];
+            for (let daysToAdd = 0; daysToAdd <= 7; daysToAdd++) {
+                const testDate = new Date(now);
+                testDate.setDate(now.getDate() + daysToAdd);
+                testDate.setHours(hours, minutes, 0, 0);
+                const testDay = testDate.getDay();
+                
+                if (weekdays.includes(testDay)) {
+                    if (daysToAdd === 0 && testDate <= now) continue;
+                    return Math.floor(testDate.getTime() / 1000);
+                }
+            }
+        }
+        return null;
+    };
+
+    // 设置RTC（选择最近的任务）
+    const setNextWakeAlarm = async () => {
+        let nearestTs = null;
+        let nearestTask = null;
+        
+        tasks.forEach(task => {
+            if (!task.enabled) return;
+            const ts = calcNextTs(task);
+            if (ts && (!nearestTs || ts < nearestTs)) {
+                nearestTs = ts;
+                nearestTask = task;
+            }
+        });
+        
+        if (nearestTs) {
+            await exec(`echo 0 > /sys/class/rtc/rtc0/wakealarm; echo ${nearestTs} > /sys/class/rtc/rtc0/wakealarm`);
+            return { ts: nearestTs, task: nearestTask };
+        } else {
+            await exec('echo 0 > /sys/class/rtc/rtc0/wakealarm');
+            return null;
+        }
+    };
+
+    // 渲染任务列表
+    const renderTasks = () => {
+        const container = document.getElementById('task_list');
+        if (!container) return;
+        
+        if (tasks.length === 0) {
+            container.innerHTML = '<div style="text-align:center;color:#888;padding:20px">暂无任务，点击下方按钮添加</div>';
+            return;
+        }
+        
+        container.innerHTML = tasks.map(task => {
+            let daysText = '';
+            if (task.once) {
+                daysText = '只一次';
+            } else if (task.weekdays.length === 0 || task.weekdays.length === 7) {
+                daysText = '每天';
+            } else {
+                daysText = task.weekdays.map(d => '周' + WEEKDAY_NAMES[d]).join(' ');
+            }
+            
+            return `
+            <div class="task-item" data-id="${task.id}">
+                <div class="task-info" onclick="editTaskP('${task.id}')">
+                    <div class="task-time">
+                        ${task.time}
+                        ${task.once ? '<span class="once-tag">一次</span>' : ''}
+                    </div>
+                    <div class="task-days">${daysText}</div>
+                </div>
+                <div class="task-actions">
+                    <label class="task-switch">
+                        <input type="checkbox" ${task.enabled ? 'checked' : ''} onchange="toggleTask('${task.id}', this.checked)">
+                        <span class="task-slider"></span>
+                    </label>
+                    <button class="task-delete" onclick="deleteTask('${task.id}')">删除</button>
+                </div>
+            </div>
+            `;
+        }).join('');
+    };
+
+    // 显示任务编辑弹窗
+    const showTaskModal = (task = null) => {
+        const isEdit = task !== null;
+        const modalHtml = `
+        <div id="TASK_EDIT_MODAL">
+            <div class="modal-content">
+                <div class="title">${isEdit ? '编辑任务' : '添加任务'}</div>
+                <div style="margin:15px 0">
+                    <div style="margin-bottom:10px">
+                        <span>开机时间:</span>
+                        <input type="time" id="task_time" value="${task?.time || '07:00'}" style="padding:6px;width:100%;box-sizing:border-box;margin-top:5px">
+                    </div>
+                    <div style="margin:10px 0">
+                        <label style="display:flex;align-items:center;gap:8px">
+                            <input type="checkbox" id="task_once" ${task?.once ? 'checked' : ''} onchange="toggleOnceMode(this.checked)">
+                            <span>只执行一次</span>
+                        </label>
+                    </div>
+                    <div id="weekdays_section" style="${task?.once ? 'display:none' : ''}">
+                        <div style="margin-bottom:5px">重复日期 (不选则每天):</div>
+                        <div class="weekday-selector">
+                            ${[1,2,3,4,5,6,0].map(d => `
+                                <label class="weekday-item">
+                                    <input type="checkbox" class="task-weekday" value="${d}" ${task?.weekdays?.includes(d) ? 'checked' : ''}>
+                                    周${WEEKDAY_NAMES[d]}
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:10px">
+                    <button onclick="saveTaskP('${task?.id || ''}')" style="flex:1;background:#4CAF50;color:white;padding:10px;border:none;border-radius:6px">保存</button>
+                    <button onclick="closeTaskModal()" style="flex:1;padding:10px;border:none;border-radius:6px">取消</button>
+                </div>
+            </div>
+        </div>
+        `;
+        
+        const div = document.createElement('div');
+        div.innerHTML = modalHtml;
+        document.body.appendChild(div.firstElementChild);
+    };
+
+    window.toggleOnceMode = (checked) => {
+        const section = document.getElementById('weekdays_section');
+        if (section) section.style.display = checked ? 'none' : '';
+    };
+
+    window.closeTaskModal = () => {
+        const modal = document.getElementById('TASK_EDIT_MODAL');
+        if (modal) modal.remove();
+    };
+
+    window.addNewTask = () => {
+        if (!isInstalled) {
+            createToast('请先安装脚本', 'red');
+            return;
+        }
+        showTaskModal();
+    };
+
+    window.editTaskP = (id) => {
+        const task = tasks.find(t => t.id === id);
+        if (task) showTaskModal(task);
+    };
+
+    window.saveTaskP = async (id) => {
+        const time = document.getElementById('task_time').value;
+        const once = document.getElementById('task_once').checked;
+        const weekdays = once ? [] : Array.from(document.querySelectorAll('.task-weekday:checked')).map(cb => parseInt(cb.value));
+        
+        if (!time) {
+            createToast('请设置时间', 'red');
+            return;
+        }
+        
+        if (id) {
+            // 编辑
+            const task = tasks.find(t => t.id === id);
+            if (task) {
+                task.time = time;
+                task.once = once;
+                task.weekdays = weekdays;
+            }
+        } else {
+            // 新增
+            const newId = Date.now().toString();
+            tasks.push({ id: newId, time, weekdays, once, enabled: true });
+        }
+        
+        await saveTasks();
+        const result = await setNextWakeAlarm();
+        closeTaskModal();
+        renderTasks();
+        
+        if (result) {
+            const nextDate = new Date(result.ts * 1000);
+            const dateStr = `${nextDate.getMonth()+1}月${nextDate.getDate()}日 ${nextDate.getHours()}:${String(nextDate.getMinutes()).padStart(2,'0')}`;
+            createToast(`✅ 已保存，下次开机: ${dateStr}`, 'green');
+        } else {
+            createToast('✅ 已保存', 'green');
+        }
+    };
+
+    window.toggleTask = async (id, enabled) => {
+        const task = tasks.find(t => t.id === id);
+        if (task) {
+            task.enabled = enabled;
+            await saveTasks();
+            const result = await setNextWakeAlarm();
+            
+            if (enabled && result) {
+                const nextDate = new Date(result.ts * 1000);
+                const dateStr = `${nextDate.getMonth()+1}月${nextDate.getDate()}日 ${nextDate.getHours()}:${String(nextDate.getMinutes()).padStart(2,'0')}`;
+                createToast(`✅ 已开启，下次开机: ${dateStr}`, 'green');
+            } else if (!enabled) {
+                createToast('✅ 已关闭', 'green');
+            }
+        }
+    };
+
+    window.deleteTask = async (id) => {
+        tasks = tasks.filter(t => t.id !== id);
+        await saveTasks();
+        await setNextWakeAlarm();
+        renderTasks();
+        createToast('✅ 已删除', 'green');
+    };
+
+    // 安装脚本
+    window.installSchedulePowerV2 = async () => {
+        if (!(await checkRoot())) {
+            createToast('没有开启高级功能,无法使用!', 'red');
+            return;
+        }
+        
+        if (isInstalled) {
+            createToast('已经安装过了', 'orange');
+            return;
+        }
+        
+        await exec(`sed -i '/${SCRIPT_MARKER}/,/${SCRIPT_MARKER}_END/d' ${BOOT_SCRIPT}`);
+        
+        // 开机脚本逻辑：
+        // 1. 读取所有任务
+        // 2. 遍历找启用的任务，计算下次时间
+        // 3. 一次性任务执行后标记关闭
+        // 4. 选最近的设置RTC
+        const lines = [
+            `${SCRIPT_MARKER}`,
+            `(`,
+            `  sleep 15`,
+            `  CONFIG="${CONFIG_FILE}"`,
+            `  [ ! -f "\$CONFIG" ] && exit 0`,
+            `  NOW_TS=\$(date +%s)`,
+            `  NOW_DAY=\$(date +%w)`,
+            `  NEAREST_TS=""`,
+            `  NEW_LINES=""`,
+            `  while IFS="|" read -r ID TIME WEEKDAYS ONCE ENABLED; do`,
+            `    [ -z "\$ID" ] && continue`,
+            `    HOUR=\$(echo \$TIME | cut -d":" -f1)`,
+            `    MIN=\$(echo \$TIME | cut -d":" -f2)`,
+            `    NEXT_TS=""`,
+            `    if [ "\$ENABLED" = "1" ]; then`,
+            `      if [ "\$ONCE" = "1" ]; then`,
+            `        TODAY_TS=\$(date -d "today \$HOUR:\$MIN:00" +%s 2>/dev/null)`,
+            `        if [ -z "\$TODAY_TS" ]; then`,
+            `          TODAY_TS=\$((NOW_TS / 86400 * 86400 + HOUR * 3600 + MIN * 60 - 28800))`,
+            `        fi`,
+            `        if [ \$TODAY_TS -gt \$NOW_TS ]; then`,
+            `          NEXT_TS=\$TODAY_TS`,
+            `        else`,
+            `          NEXT_TS=\$((TODAY_TS + 86400))`,
+            `        fi`,
+            `        if [ \$NEXT_TS -le \$NOW_TS ]; then`,
+            `          ENABLED="0"`,
+            `        fi`,
+            `      else`,
+            `        [ -z "\$WEEKDAYS" ] && WEEKDAYS="0,1,2,3,4,5,6"`,
+            `        for days in 0 1 2 3 4 5 6 7; do`,
+            `          FUTURE_DAY=\$(( (NOW_DAY + days) % 7 ))`,
+            `          if echo ",\$WEEKDAYS," | grep -q ",\$FUTURE_DAY,"; then`,
+            `            DAY_TS=\$(date -d "+\$days days \$HOUR:\$MIN:00" +%s 2>/dev/null)`,
+            `            if [ -z "\$DAY_TS" ]; then`,
+            `              DAY_TS=\$((NOW_TS / 86400 * 86400 + days * 86400 + HOUR * 3600 + MIN * 60 - 28800))`,
+            `            fi`,
+            `            if [ \$days -eq 0 ] && [ \$DAY_TS -le \$NOW_TS ]; then`,
+            `              continue`,
+            `            fi`,
+            `            NEXT_TS=\$DAY_TS`,
+            `            break`,
+            `          fi`,
+            `        done`,
+            `      fi`,
+            `      if [ -n "\$NEXT_TS" ] && [ "\$ENABLED" = "1" ]; then`,
+            `        if [ -z "\$NEAREST_TS" ] || [ \$NEXT_TS -lt \$NEAREST_TS ]; then`,
+            `          NEAREST_TS=\$NEXT_TS`,
+            `        fi`,
+            `      fi`,
+            `    fi`,
+            `    NEW_LINES="\${NEW_LINES}\${ID}|\${TIME}|\${WEEKDAYS}|\${ONCE}|\${ENABLED}\n"`,
+            `  done < "\$CONFIG"`,
+            `  printf "\$NEW_LINES" > "\$CONFIG"`,
+            `  if [ -n "\$NEAREST_TS" ]; then`,
+            `    echo 0 > /sys/class/rtc/rtc0/wakealarm`,
+            `    echo \$NEAREST_TS > /sys/class/rtc/rtc0/wakealarm`,
+            `  fi`,
+            `) &`,
+            `${SCRIPT_MARKER}_END`
+        ];
+        
+        for (const line of lines) {
+            await exec(`echo '${line}' >> ${BOOT_SCRIPT}`);
+        }
+        
+        await exec(`touch ${CONFIG_FILE}`);
+        
+        isInstalled = true;
+        updateStatus();
+        createToast('✅ 安装成功', 'green');
+    };
+
+    window.uninstallSchedulePowerV2 = async () => {
+        if (!(await checkRoot())) {
+            createToast('没有开启高级功能,无法使用!', 'red');
+            return;
+        }
+        
+        await exec(`sed -i '/${SCRIPT_MARKER}/,/${SCRIPT_MARKER}_END/d' ${BOOT_SCRIPT}`);
+        await exec(`rm -f ${CONFIG_FILE}`);
+        await exec('echo 0 > /sys/class/rtc/rtc0/wakealarm');
+        
+        isInstalled = false;
+        tasks = [];
+        updateStatus();
+        renderTasks();
+        createToast('✅ 卸载成功', 'green');
+    };
+
+    window.closeSchedulePowerV2 = () => closeModal('#SCHEDULE_POWER_V2');
+
+    window.showSchedulePowerV2Help = () => {
+        const msg = `1. 点击"安装脚本"初始化<br>
+2. 点击"+ 添加任务"创建定时任务<br>
+3. 可设置多个任务，系统自动选最近的<br>
+4. 勾选"只执行一次"为一次性任务<br>
+5. 一次性任务执行后自动关闭<br>
+6. 设备需支持RTC唤醒功能`;
+        const { el, close } = createFixedToast('schedule_power_v2_help', `
+            <div style="pointer-events:all;width:80vw;max-width:300px">
+                <div class="title" style="margin:0">使用说明</div>
+                <div style="margin:10px 0">${msg}</div>
+                <div style="text-align:right">
+                    <button style="font-size:.64rem" onclick="this.closest('[id^=toast]').remove()">关闭</button>
+                </div>
+            </div>
+        `);
+    };
+
+    // 创建modal
+    const el = document.createElement('div');
+    el.id = 'SCHEDULE_POWER_V2';
+    el.classList.add('modal');
+    el.style.opacity = '1';
+    el.style.maxWidth = '420px';
+    el.style.width = '90%';
+    el.style.display = 'none';
+    el.innerHTML = mainHtml;
+    document.querySelector('.container').appendChild(el);
+
+    await checkInstalled();
+    await loadTasks();
+    updateStatus();
+    renderTasks();
+
+    const btn = document.createElement('button');
+    btn.textContent = '定时开机v2';
+    btn.onclick = async () => {
+        showModal('#SCHEDULE_POWER_V2');
+        await checkInstalled();
+        await loadTasks();
+        updateStatus();
+        renderTasks();
+    };
+
+    document.querySelector('.actions-buttons').appendChild(btn);
+})();
+</script>

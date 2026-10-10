@@ -1,0 +1,549 @@
+//<script>
+(async () => {
+    // ─── constants ──────────────────────────────────────────
+    const MODAL = 'cpu_adjust_modal';
+    const STYLE = 'cpu_adjust_style';
+    const SH_FILE = '/sdcard/ufi_plugin_cpu_adjust.sh';
+    const BOOT_SH_FILE = '/sdcard/ufi_tools_boot.sh';
+    const BOOT_LINE = `sh ${SH_FILE} &`;
+
+    // ─── utils ──────────────────────────────────────────────
+    const sq = (v) => `'${String(v ?? '').replace(/'/g, `'\\''`)}'`;
+    const run = async (cmd, timeout = 10000) => runShellWithRoot(cmd, timeout);
+    const sleep = (ms = 120) => new Promise(resolve => setTimeout(resolve, ms));
+
+    const extractNumericFreqs = (content = '') => {
+        return String(content)
+            .split('\n')
+            .map(v => v.trim())
+            .filter(v => /^\d+$/.test(v));
+    };
+
+    let _cpuInfo = {
+        totalCores: 8,
+        little: { cores: [0, 1, 2, 3], freqs: ['614400', '768000', '936000', '1105000', '1228800', '1404000', '1560000', '1703000', '1846000', '2002000'] },
+        big: { cores: [4, 5, 6, 7], freqs: ['768000', '1157000', '1228800', '1326000', '1536000', '1703000', '1755000', '2054000', '2171000', '2301000'] }
+    };
+
+    const detectCpuInfo = async () => {
+        try {
+            const res = await run(`for p in /sys/devices/system/cpu/cpufreq/policy*; do echo "$(basename $p)|$(cat $p/related_cpus 2>/dev/null)|$(cat $p/cpuinfo_max_freq 2>/dev/null)|$(cat $p/scaling_available_frequencies 2>/dev/null)"; done`, 5000);
+            if (!res.success || !res.content.trim()) return;
+            const policies = res.content.trim().split('\n').map(line => {
+                const parts = line.split('|');
+                if (parts.length < 4) return null;
+                return {
+                    cores: parts[1].trim().split(/\s+/).map(Number).filter(n => !isNaN(n)),
+                    maxFreq: Number(parts[2]) || 0,
+                    freqs: parts[3].trim().split(/\s+/).filter(f => /^\d+$/.test(f))
+                };
+            }).filter(p => p && p.cores.length > 0 && p.freqs.length > 0);
+            if (policies.length === 0) return;
+            policies.sort((a, b) => a.maxFreq - b.maxFreq);
+            const littlePolicy = policies[0];
+            const bigPolicies = policies.slice(1);
+            bigPolicies.sort((a, b) => b.cores.length - a.cores.length);
+            const bigPrimary = bigPolicies[0];
+            _cpuInfo = {
+                totalCores: policies.reduce((s, p) => s + p.cores.length, 0),
+                little: { cores: littlePolicy.cores, freqs: littlePolicy.freqs },
+                big: {
+                    cores: bigPolicies.flatMap(p => p.cores),
+                    freqs: bigPrimary ? bigPrimary.freqs : []
+                }
+            };
+        } catch (e) { /* fallback 到默认值 */ }
+    };
+
+    const fillFreqOptions = (selectEl, freqList) => {
+        if (!selectEl || !freqList.length) return;
+        selectEl.innerHTML = '<option value="auto" disabled>自动</option>' +
+            freqList.map(f => `<option value="${f}">${Math.round(Number(f) / 1000)} MHz</option>`).join('');
+    };
+
+    // ─── state ──────────────────────────────────────────────
+    const _config = {
+        littleCpuMode: 'schedutil',
+        bigCpuMode: 'schedutil',
+        littleCoreFreq: [],
+        bigCoreFreq: [],
+        coreSwitch: []
+    };
+
+    const initConfigArrays = () => {
+        _config.littleCoreFreq = Array(_cpuInfo.little.cores.length).fill(_cpuInfo.little.freqs[0] || '614400');
+        _config.bigCoreFreq = Array(_cpuInfo.big.cores.length).fill(_cpuInfo.big.freqs[0] || '768000');
+        _config.coreSwitch = Array(_cpuInfo.totalCores).fill(1);
+    };
+
+    let timer = null;
+
+    // ─── helpers ────────────────────────────────────────────
+    const toggleCoreEnable = (selector, flag) => {
+        const root = document.querySelector(selector);
+        if (!root) return;
+        root.querySelectorAll('select').forEach(el => {
+            el.disabled = !flag;
+        });
+    };
+
+    const updateUserspaceFreqLockState = () => {
+        toggleCoreEnable('#ca_little_core_set', _config.littleCpuMode === 'userspace');
+        toggleCoreEnable('#ca_big_core_set', _config.bigCpuMode === 'userspace');
+    };
+
+    // ─── shell script ───────────────────────────────────────
+    const generateScript = () => {
+        let sh = `#!/system/bin/sh\n`;
+        for (let i = 0; i < _cpuInfo.totalCores; i++) {
+            sh += `echo ${_config.coreSwitch[i] ?? 1} > /sys/devices/system/cpu/cpu${i}/online\n`;
+        }
+        sh += `sleep 2\n`;
+        sh += `for i in ${_cpuInfo.little.cores.join(' ')}; do\n`;
+        sh += `    echo ${_config.littleCpuMode} > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_governor\n`;
+        sh += `done\n`;
+        if (_cpuInfo.big.cores.length) {
+            sh += `for i in ${_cpuInfo.big.cores.join(' ')}; do\n`;
+            sh += `    echo ${_config.bigCpuMode} > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_governor\n`;
+            sh += `done\n`;
+        }
+        sh += `sleep 2\n`;
+        if (_config.littleCpuMode === 'userspace') {
+            for (const c of _cpuInfo.little.cores) {
+                sh += `echo ${_config.littleCoreFreq[0]} > /sys/devices/system/cpu/cpu${c}/cpufreq/scaling_setspeed\n`;
+            }
+        }
+        if (_config.bigCpuMode === 'userspace' && _cpuInfo.big.cores.length) {
+            for (const c of _cpuInfo.big.cores) {
+                sh += `echo ${_config.bigCoreFreq[0]} > /sys/devices/system/cpu/cpu${c}/cpufreq/scaling_setspeed\n`;
+            }
+        }
+        return sh;
+    };
+
+    const save = async () => {
+        const shText = generateScript();
+        const file = new File([shText], 'ufi_plugin_cpu_adjust.sh', { type: 'text/plain' });
+        const ok = await saveConfig(file, SH_FILE);
+        if (ok) {
+            await run(`grep -qxF ${sq(BOOT_LINE)} ${sq(BOOT_SH_FILE)} || echo ${sq(BOOT_LINE)} >> ${sq(BOOT_SH_FILE)}`);
+        }
+    };
+
+    // ─── config read/write ──────────────────────────────────
+    const applyToDevice = async (prop, value) => {
+        switch (prop) {
+            case 'littleCpuMode': {
+                createToast(`当前小核调节器：${value}`);
+                updateUserspaceFreqLockState();
+                const r = await run(`for i in ${_cpuInfo.little.cores.join(' ')}; do echo ${sq(value)} > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_governor; done`);
+                if (!r.success) return createToast('修改失败！', 'red');
+                createToast('修改成功！', 'pink');
+                break;
+            }
+            case 'bigCpuMode': {
+                createToast(`当前大核调节器：${value}`);
+                updateUserspaceFreqLockState();
+                const r = await run(`for i in ${_cpuInfo.big.cores.join(' ')}; do echo ${sq(value)} > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_governor; done`);
+                if (!r.success) return createToast('修改失败！', 'red');
+                createToast('修改成功！', 'pink');
+                break;
+            }
+            case 'littleCoreFreq': {
+                const freq = value[0];
+                const r = await run(`for i in ${_cpuInfo.little.cores.join(' ')}; do
+                    if [ -f /sys/devices/system/cpu/cpu$i/online ] && [ "$(timeout 2s awk '{print}' /sys/devices/system/cpu/cpu$i/online 2>/dev/null)" = "0" ]; then
+                        continue
+                    fi
+                    echo ${sq(freq)} > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_setspeed
+                done`);
+                if (!r.success) return createToast('修改失败！', 'red');
+                createToast('修改成功！', 'pink');
+                break;
+            }
+            case 'bigCoreFreq': {
+                const freq = value[0];
+                const r = await run(`for i in ${_cpuInfo.big.cores.join(' ')}; do
+                    if [ -f /sys/devices/system/cpu/cpu$i/online ] && [ "$(timeout 2s awk '{print}' /sys/devices/system/cpu/cpu$i/online 2>/dev/null)" = "0" ]; then
+                        continue
+                    fi
+                    echo ${sq(freq)} > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_setspeed
+                done`);
+                if (!r.success) return createToast('修改失败！', 'red');
+                createToast('修改成功！', 'pink');
+                break;
+            }
+            case 'coreSwitch':
+                break;
+        }
+    };
+
+    const config = new Proxy(_config, {
+        set(target, prop, value) {
+            target[prop] = value;
+            applyToDevice(prop, value);
+            save();
+            return true;
+        }
+    });
+
+    // ─── init functions ────────────────────────────────────
+    const initLittleCpuMode = async () => {
+        const select = document.querySelector('#ca_little_cpu_mode');
+        if (!select) return;
+        const res = await run(`timeout 2s awk '{print}' /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || true`);
+        if (res.success) {
+            const mode = res.content.trim();
+            if (mode) {
+                select.value = mode;
+                _config.littleCpuMode = mode;
+                updateUserspaceFreqLockState();
+            }
+        }
+    };
+
+    const initBigCpuMode = async () => {
+        const select = document.querySelector('#ca_big_cpu_mode');
+        if (!select) return;
+        const res = await run(`timeout 2s awk '{print}' /sys/devices/system/cpu/cpu${_cpuInfo.big.cores[0]}/cpufreq/scaling_governor 2>/dev/null || true`);
+        if (res.success) {
+            const mode = res.content.trim();
+            if (mode) {
+                select.value = mode;
+                _config.bigCpuMode = mode;
+                updateUserspaceFreqLockState();
+            }
+        }
+    };
+
+    const initLittleCoreFreq = async () => {
+        const root = document.querySelector('#ca_little_core_set');
+        if (!root) return;
+        const select = root.querySelector('select');
+        if (!select) return;
+        if (_config.littleCpuMode !== 'userspace') {
+            select.value = 'auto';
+            toggleCoreEnable('#ca_little_core_set', false);
+            return;
+        }
+        const core0 = _cpuInfo.little.cores[0];
+        let res = await run(`timeout 2s awk '{print}' /sys/devices/system/cpu/cpu${core0}/cpufreq/scaling_setspeed 2>/dev/null || true`);
+        if (res.content.includes('unsupported')) {
+            await sleep(150);
+            res = await run(`timeout 2s awk '{print}' /sys/devices/system/cpu/cpu${core0}/cpufreq/scaling_setspeed 2>/dev/null || true`);
+        }
+        const freqValues = extractNumericFreqs(res.content);
+        if (freqValues.length === 0) {
+            toggleCoreEnable('#ca_little_core_set', false);
+        } else {
+            const freq = freqValues[0];
+            _config.littleCoreFreq = Array(_cpuInfo.little.cores.length).fill(freq);
+            select.value = freq;
+            if (select.selectedIndex <= 0 && _cpuInfo.little.freqs.length) {
+                const closest = _cpuInfo.little.freqs.reduce((a, b) =>
+                    Math.abs(Number(b) - Number(freq)) < Math.abs(Number(a) - Number(freq)) ? b : a);
+                select.value = closest;
+            }
+            toggleCoreEnable('#ca_little_core_set', true);
+        }
+    };
+
+    const initBigCoreFreq = async () => {
+        const root = document.querySelector('#ca_big_core_set');
+        if (!root) return;
+        const select = root.querySelector('select');
+        if (!select) return;
+        if (_cpuInfo.big.cores.length === 0 || _config.bigCpuMode !== 'userspace') {
+            select.value = 'auto';
+            toggleCoreEnable('#ca_big_core_set', false);
+            return;
+        }
+        const core0 = _cpuInfo.big.cores[0];
+        let res = await run(`timeout 2s awk '{print}' /sys/devices/system/cpu/cpu${core0}/cpufreq/scaling_setspeed 2>/dev/null || true`);
+        if (res.content.includes('unsupported')) {
+            await sleep(150);
+            res = await run(`timeout 2s awk '{print}' /sys/devices/system/cpu/cpu${core0}/cpufreq/scaling_setspeed 2>/dev/null || true`);
+        }
+        const freqValues = extractNumericFreqs(res.content);
+        if (freqValues.length === 0) {
+            toggleCoreEnable('#ca_big_core_set', false);
+        } else {
+            const freq = freqValues[0];
+            _config.bigCoreFreq = Array(_cpuInfo.big.cores.length).fill(freq);
+            select.value = freq;
+            if (select.selectedIndex <= 0 && _cpuInfo.big.freqs.length) {
+                const closest = _cpuInfo.big.freqs.reduce((a, b) =>
+                    Math.abs(Number(b) - Number(freq)) < Math.abs(Number(a) - Number(freq)) ? b : a);
+                select.value = closest;
+            }
+            toggleCoreEnable('#ca_big_core_set', true);
+        }
+    };
+
+    const cpuCoreQuery = async (number) => {
+        const res = await run(`timeout 2s awk '{print}' /sys/devices/system/cpu/cpu${number}/online 2>/dev/null || echo 0`);
+        if (res.success) {
+            return res.content.trim() || '0';
+        }
+        return '0';
+    };
+
+    const cpuCoreToggle = async (number, flag) => {
+        const r = await run(`echo ${flag ? '1' : '0'} > /sys/devices/system/cpu/cpu${number}/online`);
+        if (r.success) {
+            const t = [..._config.coreSwitch];
+            t[+number] = flag ? 1 : 0;
+            config.coreSwitch = t;
+            createToast(`${flag ? '开启' : '关闭'}核心${+number + 1}成功`, 'pink');
+        } else {
+            createToast(`${flag ? '开启' : '关闭'}核心${+number + 1}失败`, 'red');
+        }
+        await initLittleCpuMode();
+        await initBigCpuMode();
+        await initLittleCoreFreq();
+        await initBigCoreFreq();
+    };
+
+    // ─── style ─────────────────────────────────────────────
+    const ensureStyle = () => {
+        if (document.getElementById(STYLE)) return;
+        const s = document.createElement('style');
+        s.id = STYLE;
+        s.textContent = `
+      #${MODAL} .ca-wrap{display:flex;flex-direction:column;gap:8px;font-size:.74rem;}
+      #${MODAL} .ca-card{border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03));border-radius:14px;padding:10px 12px;}
+      #${MODAL} .ca-row{display:flex;align-items:center;gap:6px;}
+      #${MODAL} .ca-section{font-size:.65rem;font-weight:600;opacity:.7;margin-bottom:6px;}
+      #${MODAL} .ca-label{font-size:.62rem;opacity:.55;margin-bottom:3px;}
+      #${MODAL} .ca-select{padding:5px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.18);color:inherit;font-size:.68rem;outline:none;width:100%;box-sizing:border-box;}
+      #${MODAL} .ca-select:disabled{opacity:.35;}
+      #${MODAL} .ca-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+      #${MODAL} .ca-grid-item{display:flex;flex-direction:column;}
+      #${MODAL} .ca-divider{height:1px;background:rgba(255,255,255,.06);margin:6px 0;}
+      #${MODAL} .ca-core-group{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;}
+      #${MODAL} .ca-core-group .signal_bar{cursor:pointer;transition:opacity .2s;margin:0 !important;flex:1 1 0;min-width:0;width:auto !important;padding:10px 4px !important;}
+      #${MODAL} .ca-core-group .signal_bar .text{font-size:10px !important;white-space:nowrap;}
+      #${MODAL} .ca-core-group .signal_bar.ca-offline{opacity:.3;}
+      #${MODAL} .ca-hint{font-size:.55rem;opacity:.4;}
+    `;
+        document.head.appendChild(s);
+    };
+
+    // ─── render ─────────────────────────────────────────────
+    const render = () => {
+        return `
+      <div class="ca-wrap">
+        <div class="ca-card">
+          <div class="ca-section" style="margin-bottom:6px;">核心状态</div>
+          <div class="ca-core-group" id="ca_little_cores"></div>
+          ${_cpuInfo.big.cores.length ? `<div class="ca-core-group" id="ca_big_cores" style="margin-top:3px;"></div>` : ''}
+        </div>
+        <div class="ca-card">
+          <div class="ca-section">调节器模式</div>
+          <div class="ca-grid">
+            <div class="ca-grid-item">
+              <div class="ca-label">小核簇 (CPU${_cpuInfo.little.cores.join(',')})</div>
+              <select class="ca-select" id="ca_little_cpu_mode">
+                <option value="schedutil">智能</option>
+                <option value="userspace">手动锁频</option>
+                <option value="conservative">平衡</option>
+                <option value="powersave">省电</option>
+                <option value="performance">高性能</option>
+              </select>
+            </div>
+            ${_cpuInfo.big.cores.length ? `<div class="ca-grid-item">
+              <div class="ca-label">大核簇 (CPU${_cpuInfo.big.cores.join(',')})</div>
+              <select class="ca-select" id="ca_big_cpu_mode">
+                <option value="schedutil">智能</option>
+                <option value="userspace">手动锁频</option>
+                <option value="conservative">平衡</option>
+                <option value="powersave">省电</option>
+                <option value="performance">高性能</option>
+              </select>
+            </div>` : ''}
+          </div>
+          <div class="ca-divider"></div>
+          <div class="ca-section">锁定频率 <span class="ca-hint">仅手动锁频模式下可用</span></div>
+          <div class="ca-grid">
+            <div class="ca-grid-item" id="ca_little_core_set">
+              <div class="ca-label">小核</div>
+              <select class="ca-select" data-act="freq-little"></select>
+            </div>
+            ${_cpuInfo.big.cores.length ? `<div class="ca-grid-item" id="ca_big_core_set">
+              <div class="ca-label">大核</div>
+              <select class="ca-select" data-act="freq-big"></select>
+            </div>` : ''}
+          </div>
+        </div>
+      </div>`;
+    };
+
+    // ─── bind ───────────────────────────────────────────────
+    const bind = (el) => {
+        if (!el) return;
+
+        const littleModeSelect = el.querySelector('#ca_little_cpu_mode');
+        const bigModeSelect = el.querySelector('#ca_big_cpu_mode');
+
+        const handleModeChange = async (e) => {
+            if (!e.target.value) return;
+            if (e.target.id === 'ca_little_cpu_mode') {
+                config.littleCpuMode = e.target.value;
+            } else if (e.target.id === 'ca_big_cpu_mode') {
+                config.bigCpuMode = e.target.value;
+            }
+            await sleep(180);
+            await initLittleCoreFreq();
+            await initBigCoreFreq();
+        };
+
+        if (littleModeSelect) littleModeSelect.addEventListener('change', handleModeChange);
+        if (bigModeSelect) bigModeSelect.addEventListener('change', handleModeChange);
+
+        const freqLittle = el.querySelector('[data-act="freq-little"]');
+        const freqBig = el.querySelector('[data-act="freq-big"]');
+
+        if (freqLittle) {
+            freqLittle.addEventListener('change', (e) => {
+                const val = e.target.value;
+                _config.littleCoreFreq = Array(_cpuInfo.little.cores.length).fill(val);
+                config.littleCoreFreq = [..._config.littleCoreFreq];
+            });
+        }
+        if (freqBig) {
+            freqBig.addEventListener('change', (e) => {
+                const val = e.target.value;
+                _config.bigCoreFreq = Array(_cpuInfo.big.cores.length).fill(val);
+                config.bigCoreFreq = [..._config.bigCoreFreq];
+            });
+        }
+
+    };
+
+    const initCpuSwitch = async (el) => {
+        if (!el) return;
+        const bars = el.querySelectorAll('.ca-core-group .signal_bar');
+
+        bars.forEach(bar => {
+            const i = bar.dataset.core;
+            if (i == null) return;
+            let enabled = _config.coreSwitch[i] ? '1' : '0';
+            if (enabled !== '1') bar.classList.add('ca-offline');
+            bar.style.cursor = 'pointer';
+            bar.onclick = async () => {
+                await cpuCoreToggle(i, enabled !== '1');
+                enabled = enabled === '1' ? '0' : '1';
+                bar.classList.toggle('ca-offline', enabled !== '1');
+            };
+        });
+    };
+
+    const freqGen = () => {
+        const cpuFreqInfo = window.UFI_DATA && window.UFI_DATA.cpuFreqInfo;
+        if (!cpuFreqInfo) return;
+        const littleEl = document.querySelector(`#${MODAL} #ca_little_cores`);
+        const bigEl = document.querySelector(`#${MODAL} #ca_big_cores`);
+        if (!littleEl) return;
+        const btnColor = getCssVariableColor('--dark-btn-color-active');
+
+        let littleHtml = '';
+        let bigHtml = '';
+        for (let i = 0; cpuFreqInfo[`cpu${i}`] != null; i++) {
+            const info = cpuFreqInfo[`cpu${i}`];
+            const usgList = window.UFI_DATA.cpuUsageInfo;
+            const online = !usgList || !!usgList[`cpu${i}`];
+            const cur = online ? info.cur : 0;
+            const barHtml = kano_parseSignalBar(cur, 0, info.max, info.max * 0.9, info.max * 0.9, {
+                g: '#ffa5008f', o: '#ffa5008f', r: btnColor
+            }).replace('<span class="signal_bar"', `<span class="signal_bar${online ? '' : ' ca-offline'}" data-core="${i}"`);
+            if (_cpuInfo.little.cores.includes(i)) littleHtml += barHtml;
+            else bigHtml += barHtml;
+        }
+        littleEl.innerHTML = littleHtml;
+        if (bigEl) bigEl.innerHTML = bigHtml;
+        initCpuSwitch(document.querySelector(`#${MODAL}`));
+    };
+
+    // ─── help ──────────────────────────────────────────────
+    const HELP_TEXT = `<b>功能说明</b><br>点击首页「CPU频率」卡片打开此面板，可实时查看各核心频率并调整 CPU 运行参数。<br><br><b>核心状态</b><br>每个色块代表一个核心，点击可开启/关闭该核心。关闭的核心会变灰。<br><br><b>调节器模式</b><br>智能：系统自动调频（默认）<br>手动锁频：固定在指定频率运行<br>省电/高性能：始终保持最低/最高频率<br><br><b>提示</b><br>1. 点击「提交」会保存当前配置并注册开机自启<br>2. 关闭核心可降低发热，但可能影响性能`;
+
+    const showHelp = () => {
+        const { el, close } = createFixedToast('ca_help_toast', `
+            <div style="pointer-events:all;width:80vw;max-width:300px">
+                <div class="title" style="margin:0">使用说明</div>
+                <div style="margin:10px 0;font-size:.68rem;line-height:1.6">${HELP_TEXT}</div>
+                <div style="text-align:right">
+                    <button style="font-size:.64rem" id="ca_help_dismiss">关闭</button>
+                </div>
+            </div>`);
+        el.querySelector('#ca_help_dismiss').onclick = () => close();
+    };
+
+    const injectHelpButton = (modalEl) => {
+        const titleSpan = modalEl.querySelector('.title > span');
+        if (!titleSpan) return;
+        const helpBtn = document.createElement('button');
+        helpBtn.textContent = '?';
+        helpBtn.style.cssText = 'width:16px;height:16px;border-radius:50%;padding:0;font-size:.5rem;line-height:16px;text-align:center;cursor:pointer;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);margin-left:8px;vertical-align:middle;flex-shrink:0;';
+        helpBtn.onclick = (e) => { e.stopPropagation(); showHelp(); };
+        titleSpan.appendChild(helpBtn);
+    };
+
+    // ─── mount ──────────────────────────────────────────────
+    const openModal = async () => {
+        if (!(await checkAdvancedFunc())) {
+            return createToast('没有开启高级功能，无法使用！', 'red');
+        }
+
+        await detectCpuInfo();
+        initConfigArrays();
+
+        ensureStyle();
+        document.querySelector(`#${MODAL}`)?.remove();
+
+        const { id, el } = createModal({
+            name: MODAL,
+            title: 'CPU调节器',
+            maxWidth: '420px',
+            contentStyle: 'max-height:80vh;overflow-y:auto;',
+            showConfirm: true,
+            confirmBtnText: '提交',
+            onConfirm: () => {
+                if (timer) { timer(); timer = null; }
+                createToast('已保存至开机脚本', 'pink');
+                save();
+                return true;
+            },
+            onClose: () => {
+                if (timer) { timer(); timer = null; }
+                return true;
+            },
+            content: render(),
+        });
+
+        fillFreqOptions(el.querySelector('[data-act="freq-little"]'), _cpuInfo.little.freqs);
+        fillFreqOptions(el.querySelector('[data-act="freq-big"]'), _cpuInfo.big.freqs);
+
+        bind(el);
+        injectHelpButton(el);
+        showModal(id);
+
+        if (timer) { timer(); }
+        freqGen();
+        timer = requestInterval(() => { freqGen(); }, 1000);
+
+        await initLittleCpuMode();
+        await initBigCpuMode();
+        await initLittleCoreFreq();
+        await initBigCoreFreq();
+
+        for (let i = 0; i < _cpuInfo.totalCores; i++) {
+            const enabled = await cpuCoreQuery(i);
+            _config.coreSwitch[i] = Number(enabled);
+        }
+    };
+
+    const card = document.querySelector('.cpu-card');
+    if (card) card.onclick = openModal;
+})();
+//</script>

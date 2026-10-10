@@ -1,0 +1,79 @@
+//<script>
+(() => {
+    const refreshBtn_kano = document.createElement('button')
+    refreshBtn_kano.classList.add('btn')
+    refreshBtn_kano.textContent = "射频性能增强"
+    let status = false
+
+    const checkAdvanceFunc = async () => {
+        const res = await runShellWithRoot('whoami')
+        if (res.content) {
+            if (res.content.includes('root')) {
+                return true
+            }
+        }
+        return false
+    }
+
+    const togglePM = async (flag = false) => {
+        try {
+            if (flag) {
+                await handleAT('AT+SPASENGMD =\"#las_set_speedtest_control\",1')
+                const res = await runShellWithRoot('settings put global perfermance_enhancement 1')
+                if (!res.success) {
+                    throw new Error('设置失败')
+                }
+            }
+            else {
+                await handleAT('AT+SPASENGMD =\"#las_set_speedtest_control\",0')
+                const res = await runShellWithRoot('settings put global perfermance_enhancement 0')
+                if (!res.success) {
+                    throw new Error('设置失败')
+                }
+            }
+        } catch {
+            createToast('射频性能增强切换失败')
+        }
+    }
+
+    const init = async () => {
+        const res = await runShellWithRoot('settings get global perfermance_enhancement')
+        if (res.content) {
+            if (res.content.includes('1')) {
+                status = true
+                refreshBtn_kano.style.backgroundColor = 'var(--dark-btn-color-active)'
+            }
+        }
+    }
+
+    const start = async () => {
+        const canUse = await checkAdvanceFunc()
+        if (!canUse) {
+            createToast('请先打开高级功能')
+            return
+        }
+        if (status) {
+            await togglePM(false)
+            status = false
+            createToast('已关闭射频性能增强')
+            refreshBtn_kano.style.backgroundColor = ''
+        }
+        else {
+            await togglePM(true)
+            status = true
+            refreshBtn_kano.style.backgroundColor = 'var(--dark-btn-color-active)'
+            createToast('已开启射频性能增强')
+        }
+    }
+
+    refreshBtn_kano.onclick = start
+
+    collapseBtn_menu.nextElementSibling.querySelector('.collapse_box').appendChild(refreshBtn_kano)
+
+    let r = setInterval(() => {
+        if (UFI_DATA.loginfo != "ok") return
+        init()
+        clearInterval(r)
+    }, 300);
+})()
+//</script>

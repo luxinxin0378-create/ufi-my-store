@@ -1,0 +1,1184 @@
+//<script>
+(async () => {
+    const REQUIRED_APIS = ['createModal', 'createToast', 'createFixedToast', 'showModal', 'runShellWithRoot', 'uploadFileKano', 'downloadUrl'];
+    const missingApis = REQUIRED_APIS.filter((n) => {
+        try { return typeof eval(n) !== 'function'; } catch { return true; }
+    });
+    if (missingApis.length) {
+        try { createToast?.('缺少 API: ' + missingApis.join(', '), 'red', 5000); } catch {}
+        return;
+    }
+
+    try {
+
+    // ─── constants ──────────────────────────────────────────
+    const MODAL = 'ikc_modal';
+    const STYLE = 'ikc_style';
+    const NAME = 'ikc';
+    const ENTRY_ID = 'ikc_entry_btn';
+    const TMP = '/data/local/tmp/kano_tmp_modem';
+    const PATCHER = TMP + '/patcher';
+    const INPUT = TMP + '/modem_input.img';
+    const OUTPUT = TMP + '/modem_patched.img';
+    const UPLOADS = '/data/data/com.minikano.f50_sms/files/uploads';
+    const PATCHER_SHA = '89945a1f68a0311f6c14f96bbc95979e04cd782e696e4ea4cb26b76ec5fbacee';
+    const IMEI_READER = '/data/data/com.minikano.f50_sms/files/imei_reader';
+    const SHELL_TO = 30000;   // 0x7530
+    const DD_TO = 600000;     // 0x927c0 = 10min
+    const SHASIZE_TO = 20000; // 0x4e20
+    const AT_TO = 60000;
+    const BYNAME_BASES = '/dev/block/bootdevice/by-name /dev/block/by-name /dev/block/platform/*/by-name /dev/block/platform/*/*/by-name';
+
+    // 内置 patcher（ARM32 ELF，6376 字节）
+    const PATCHER_B64 = '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';
+
+    // ─── utils ──────────────────────────────────────────────
+    const sq = (v) => `'${String(v ?? '').replace(/'/g, `'\\''`)}'`;
+    const esc = (v) => String(v ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    const run = async (cmd, timeout = SHELL_TO) => runShellWithRoot(cmd, timeout);
+    const sh = async (cmd, timeout = SHELL_TO) => {
+        const r = await run(cmd, timeout);
+        return { ok: !!(r && r.success), text: ((r && r.content) || '').trim(), raw: r };
+    };
+    const explainStageFailure = (text, fallback) => {
+        const markers = [
+            ['__FAIL_PREP_DIR_TYPE__', '临时路径已存在但不是目录'],
+            ['__FAIL_PREP_MKDIR__', '临时目录创建失败'],
+            ['__FAIL_PREP_REMOVE__', '临时文件清理失败'],
+            ['__FAIL_PREP_PATCHER_MISSING__', 'patcher 文件不存在'],
+            ['__FAIL_PREP_CHMOD__', 'patcher 权限修复失败'],
+            ['__FAIL_PREP_NOT_EXECUTABLE__', 'patcher 仍不可执行'],
+            ['__FAIL_DEPLOY_DIR_TYPE__', 'patcher 临时路径不是目录'],
+            ['__FAIL_DEPLOY_MKDIR__', 'patcher 临时目录创建失败'],
+            ['__FAIL_DEPLOY_SOURCE_MISSING__', '上传的 patcher 文件不存在'],
+            ['__FAIL_DEPLOY_REMOVE__', '旧 patcher 文件清理失败'],
+            ['__FAIL_DEPLOY_MOVE__', 'patcher 文件移动失败'],
+            ['__FAIL_DEPLOY_DEST_MISSING__', 'patcher 移动后不存在'],
+            ['__FAIL_DEPLOY_CHMOD__', 'patcher 权限设置失败'],
+            ['__FAIL_DEPLOY_NOT_EXECUTABLE__', 'patcher 设置后仍不可执行'],
+        ];
+        const value = String(text || '');
+        const marker = markers.find(([key]) => value.includes(key));
+        return marker ? marker[1] : fallback;
+    };
+    const b64ToBytes = (b64) => {
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return bytes;
+    };
+    const jsSha256Hex = (data) => {
+        const K = [
+            0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+            0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+            0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+            0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+            0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+            0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+            0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+            0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+        ];
+        const rotr = (x, n) => ((x >>> n) | (x << (32 - n))) >>> 0;
+        const len = data.length;
+        const bitLen = len * 8;
+        const padLen = ((len + 9 + 63) & ~63);
+        const msg = new Uint8Array(padLen);
+        msg.set(data);
+        msg[len] = 0x80;
+        const dv = new DataView(msg.buffer);
+        dv.setUint32(padLen - 4, bitLen >>> 0, false);
+        dv.setUint32(padLen - 8, (bitLen / 0x100000000) >>> 0, false);
+        let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
+        let h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
+        const w = new Uint32Array(64);
+        for (let off = 0; off < padLen; off += 64) {
+            for (let i = 0; i < 16; i++) w[i] = dv.getUint32(off + i * 4, false);
+            for (let i = 16; i < 64; i++) {
+                const s0 = rotr(w[i-15],7) ^ rotr(w[i-15],18) ^ (w[i-15]>>>3);
+                const s1 = rotr(w[i-2],17) ^ rotr(w[i-2],19) ^ (w[i-2]>>>10);
+                w[i] = (w[i-16] + s0 + w[i-7] + s1) >>> 0;
+            }
+            let a=h0, b=h1, c=h2, d=h3, e=h4, f=h5, g=h6, h=h7;
+            for (let i = 0; i < 64; i++) {
+                const S1 = rotr(e,6) ^ rotr(e,11) ^ rotr(e,25);
+                const ch = (e & f) ^ (~e & g);
+                const temp1 = (h + S1 + ch + K[i] + w[i]) >>> 0;
+                const S0 = rotr(a,2) ^ rotr(a,13) ^ rotr(a,22);
+                const maj = (a & b) ^ (a & c) ^ (b & c);
+                const temp2 = (S0 + maj) >>> 0;
+                h=g; g=f; f=e; e=(d+temp1)>>>0; d=c; c=b; b=a; a=(temp1+temp2)>>>0;
+            }
+            h0=(h0+a)>>>0; h1=(h1+b)>>>0; h2=(h2+c)>>>0; h3=(h3+d)>>>0;
+            h4=(h4+e)>>>0; h5=(h5+f)>>>0; h6=(h6+g)>>>0; h7=(h7+h)>>>0;
+        }
+        return [h0,h1,h2,h3,h4,h5,h6,h7].map(v=>(v>>>0).toString(16).padStart(8,'0')).join('');
+    };
+    const sha256File = async (file) => {
+        const buf = await file.arrayBuffer();
+        const subtle = (globalThis.crypto && globalThis.crypto.subtle) || null;
+        if (subtle && typeof subtle.digest === 'function') {
+            try {
+                const hash = await subtle.digest('SHA-256', buf);
+                return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('');
+            } catch (e) { /* 回退纯 JS */ }
+        }
+        return jsSha256Hex(new Uint8Array(buf));
+    };
+    const ts = () => {
+        const d = new Date();
+        const p = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+    };
+    const copyText = async (text) => {
+        text = String(text || '');
+        if (!text) return;
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(text);
+                createToast('已复制：' + text, 'green', 1500);
+                return;
+            }
+        } catch (e) { console.error(e); }
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            createToast(ok ? '已复制：' + text : '复制失败，请长按选择文本', ok ? 'green' : 'red', 1800);
+        } catch (e) {
+            createToast('复制失败，请长按选择文本', 'red', 2000);
+        }
+    };
+    // IMEI Luhn 校验位
+    const luhnCheckDigit = (digits14) => {
+        const arr = digits14.split('').map(Number);
+        let sum = 0;
+        for (let i = 0; i < arr.length; i++) {
+            let d = arr[arr.length - 1 - i];
+            if (i % 2 === 0) { d *= 2; if (d > 9) d -= 9; }
+            sum += d;
+        }
+        return (10 - (sum % 10)) % 10;
+    };
+    const luhnValid = (imei) => /^\d{15}$/.test(imei) && luhnCheckDigit(imei.slice(0, 14)) === Number(imei[14]);
+    const randomImei = () => {
+        let d = '';
+        for (let i = 0; i < 14; i++) d += Math.floor(Math.random() * 10);
+        return d + luhnCheckDigit(d);
+    };
+
+    // ─── state ──────────────────────────────────────────────
+    const state = {
+        busy: false,
+        _refreshing: false,
+        slot: '-',
+        partition: null,
+        patcherReady: false,
+        patcherInstalling: null,
+        atSlot: '0',
+        currentImei: '',
+        logs: [],
+        avb: null,
+    };
+
+    // ─── shell script ───────────────────────────────────────
+    const shaBody = (p) => `if command -v sha256sum >/dev/null 2>&1; then
+  sha256sum ${p} | awk '{print $1}'
+elif command -v busybox >/dev/null 2>&1; then
+  busybox sha256sum ${p} | awk '{print $1}'
+elif command -v toybox >/dev/null 2>&1; then
+  toybox sha256sum ${p} | awk '{print $1}'
+elif command -v openssl >/dev/null 2>&1; then
+  openssl dgst -sha256 ${p} | awk '{print $NF}'
+else
+  echo "__NO_CHECKSUM__"
+fi`;
+    // 文件大小多后端 fallback
+    const sizeBody = (p) => `if stat -c%s ${p} >/dev/null 2>&1; then
+  stat -c%s ${p}
+elif busybox stat -c%s ${p} >/dev/null 2>&1; then
+  busybox stat -c%s ${p}
+else
+  wc -c < ${p}
+fi`;
+
+    const detectPartCmd = (targets) => `TARGETS=${sq(targets.join(' '))}
+for base in ${BYNAME_BASES}; do
+  [ -d "$base" ] || continue
+  for name in $TARGETS; do
+    path="$base/$name"
+    [ -e "$path" ] || continue
+    real="$(readlink -f "$path" 2>/dev/null)"
+    printf '%s\t%s\t%s\n' "$name" "$path" "$real"
+    exit 0
+  done
+  for path in "$base"/nr_modem*; do
+    [ -e "$path" ] || continue
+    name="$(basename "$path")"
+    real="$(readlink -f "$path" 2>/dev/null)"
+    printf '%s\t%s\t%s\n' "$name" "$path" "$real"
+    exit 0
+  done
+done`;
+
+    const deployCmd = (uploadedName) => `DIR=${sq(TMP)}
+SRC=${sq(UPLOADS + '/' + uploadedName)}
+DST=${sq(PATCHER)}
+if [ -e "$DIR" ] && [ ! -d "$DIR" ]; then echo "__FAIL_DEPLOY_DIR_TYPE__"; exit 1; fi
+mkdir -p "$DIR" 2>/dev/null || { sleep 1; mkdir -p "$DIR" 2>/dev/null || { echo "__FAIL_DEPLOY_MKDIR__"; exit 1; }; }
+if [ -f "$DST" ] && [ ! -e "$SRC" ]; then
+  chmod 0755 "$DST" 2>/dev/null || { sleep 1; chmod 0755 "$DST" 2>/dev/null || { echo "__FAIL_DEPLOY_CHMOD__"; exit 1; }; }
+  [ -x "$DST" ] || { echo "__FAIL_DEPLOY_NOT_EXECUTABLE__"; exit 1; }
+  echo "__OK__"
+  exit 0
+fi
+[ -f "$SRC" ] || { echo "__FAIL_DEPLOY_SOURCE_MISSING__"; exit 1; }
+rm -f "$DST" 2>/dev/null || { sleep 1; rm -f "$DST" 2>/dev/null || { echo "__FAIL_DEPLOY_REMOVE__"; exit 1; }; }
+[ ! -e "$DST" ] || { echo "__FAIL_DEPLOY_REMOVE__"; exit 1; }
+mv "$SRC" "$DST" 2>/dev/null || { sleep 1; mv "$SRC" "$DST" 2>/dev/null || { echo "__FAIL_DEPLOY_MOVE__"; exit 1; }; }
+[ -f "$DST" ] || { echo "__FAIL_DEPLOY_DEST_MISSING__"; exit 1; }
+chmod 0755 "$DST" 2>/dev/null || { sleep 1; chmod 0755 "$DST" 2>/dev/null || { echo "__FAIL_DEPLOY_CHMOD__"; exit 1; }; }
+[ -x "$DST" ] || { echo "__FAIL_DEPLOY_NOT_EXECUTABLE__"; exit 1; }
+echo "__OK__"`;
+
+    const prepareCmd = () => `DIR=${sq(TMP)}
+PATCHER=${sq(PATCHER)}
+INPUT=${sq(INPUT)}
+OUTPUT=${sq(OUTPUT)}
+if [ -e "$DIR" ] && [ ! -d "$DIR" ]; then echo "__FAIL_PREP_DIR_TYPE__"; exit 1; fi
+mkdir -p "$DIR" 2>/dev/null || { sleep 1; mkdir -p "$DIR" 2>/dev/null || { echo "__FAIL_PREP_MKDIR__"; exit 1; }; }
+[ -d "$DIR" ] || { echo "__FAIL_PREP_MKDIR__"; exit 1; }
+for target in "$INPUT" "$OUTPUT"; do
+  rm -f "$target" 2>/dev/null || { sleep 1; rm -f "$target" 2>/dev/null || { echo "__FAIL_PREP_REMOVE__:$target"; exit 1; }; }
+  [ ! -e "$target" ] || { echo "__FAIL_PREP_REMOVE__:$target"; exit 1; }
+done
+[ -f "$PATCHER" ] || { echo "__FAIL_PREP_PATCHER_MISSING__"; exit 2; }
+[ -x "$PATCHER" ] || { sleep 1; chmod 0755 "$PATCHER" 2>/dev/null || { echo "__FAIL_PREP_CHMOD__"; exit 1; }; }
+[ -x "$PATCHER" ] || { echo "__FAIL_PREP_NOT_EXECUTABLE__"; exit 1; }
+echo "__OK__"`;
+
+    const exportCmd = (part, outPath) => `PART=${sq(part)}
+OUT=${sq(outPath)}
+rm -f "$OUT"
+dd if="$PART" of="$OUT" bs=4M 2>&1 || exit 1
+sync || exit 1
+[ -f "$OUT" ] || exit 1
+echo "__OK__"`;
+
+    const importCmd = (img, part, localSum, localSize) => `IMG=${sq(img)}
+PART=${sq(part)}
+REMOTE_SUM="$(
+${shaBody('"$IMG"')}
+)"
+REMOTE_SIZE="$(
+${sizeBody('"$IMG"')}
+)"
+[ "$REMOTE_SUM" = ${sq(localSum)} ] || exit 1
+[ "$REMOTE_SIZE" = ${sq(String(localSize))} ] || exit 1
+dd if="$IMG" of="$PART" bs=4M conv=fsync 2>&1 || exit 1
+sync || exit 1
+echo "__OK__"`;
+
+    const patchCmd = (part) => `PART=${sq(part)}
+PATCHER=${sq(PATCHER)}
+INPUT=${sq(INPUT)}
+OUTPUT=${sq(OUTPUT)}
+dd if="$PART" of="$INPUT" bs=4M 2>&1 || exit 1
+sync || exit 1
+[ -f "$INPUT" ] || exit 1
+"$PATCHER" "$INPUT" "$OUTPUT" 2>&1
+STATUS=$?
+[ $STATUS -eq 0 ] || exit $STATUS
+[ -f "$OUTPUT" ] || exit 2
+echo "__OK__"`;
+
+    const flushCmd = (part, patchedSum) => `IMG=${sq(OUTPUT)}
+PART=${sq(part)}
+REMOTE_SUM="$(
+${shaBody('"$IMG"')}
+)"
+[ "$REMOTE_SUM" = ${sq(patchedSum)} ] || exit 1
+dd if="$IMG" of="$PART" bs=4M conv=fsync 2>&1 || exit 1
+sync || exit 1
+echo "__OK__"`;
+
+    // ─── helpers ────────────────────────────────────────────
+    const getPartPath = () => state.partition ? (state.partition.realPath || state.partition.linkPath) : '';
+
+    const computeChecksumSize = async (path) => {
+        const [c, s] = await Promise.all([
+            run(shaBody(sq(path)), SHASIZE_TO),
+            run(sizeBody(sq(path)), SHASIZE_TO),
+        ]);
+        return {
+            checksum: ((c && c.content) || '').trim(),
+            size: parseInt(((s && s.content) || '').trim(), 10) || 0,
+        };
+    };
+
+    const detectEnv = async () => {
+        const props = ['ro.boot.slot', 'ro.boot.slot_name', 'ro.boot.slot.active', 'ro.boot.slot_suffix'];
+        const cmd = [
+            ...props.map((p) => `getprop ${sq(p)}`),
+            'getprop ro.boot.vbmeta.device_state',
+            'getprop ro.boot.verifiedbootstate',
+            'ls /debug_ramdisk/ 2>/dev/null',
+            `for base in ${BYNAME_BASES}; do [ -d "$base" ] && ls "$base"/ 2>/dev/null | grep vbmeta_modem; done`
+        ].join('; echo "---"; ');
+        const r = await run(cmd, SHELL_TO);
+        const parts = ((r && r.content) || '').split('---');
+        state.slot = '-';
+        for (let i = 0; i < 4; i++) {
+            let v = (parts[i] || '').trim();
+            if (v) { if (v.startsWith('_')) v = v.slice(1); state.slot = v; break; }
+        }
+        const deviceState = (parts[4] || '').trim();
+        const bootState = (parts[5] || '').trim();
+        const ramdisk = (parts[6] || '').toLowerCase();
+        const hasRoot = ramdisk.includes('magisk') || ramdisk.includes('su') || ramdisk.includes('root');
+        const hasVbmetaModem = (parts[7] || '').trim().length > 0;
+        state.avb = { hasRoot, deviceState, bootState, hasVbmetaModem };
+    };
+
+    const detectPartition = async () => {
+        const slot = state.slot;
+        let targets;
+        if (slot === 'a' || slot === 'b') {
+            const opp = slot === 'a' ? 'b' : 'a';
+            targets = [`nr_modem_${slot}`, 'nr_modem', `nr_modem_${opp}`];
+        } else {
+            targets = ['nr_modem'];
+        }
+        const r = await sh(detectPartCmd(targets), SHELL_TO);
+        const line = (r.text || '').split('\n').map((x) => x.replace(/\r$/, '')).filter(Boolean)[0];
+        if (!line) {
+            state.partition = null;
+            appendLog('未找到 nr_modem 分区，本设备可能不支持修补/导入功能');
+            return null;
+        }
+        const parts = line.split('\t');
+        state.partition = {
+            name: (parts[0] || '').trim(),
+            linkPath: (parts[1] || '').trim(),
+            realPath: (parts[2] || '').trim(),
+        };
+        return state.partition;
+    };
+
+    const installPatcher = (silent) => {
+        if (state.patcherInstalling) return state.patcherInstalling;
+        state.patcherInstalling = (async () => {
+            try {
+                // 幂等：已存在且校验通过则跳过上传
+                const pre = await computeChecksumSize(PATCHER);
+                if (pre.checksum === PATCHER_SHA && pre.size > 0) {
+                    state.patcherReady = true;
+                    return true;
+                }
+                const file = new File([b64ToBytes(PATCHER_B64)], 'patcher', { type: 'application/octet-stream' });
+                const uploaded = await uploadFileKano(file, true);
+                if (!uploaded) throw new Error('patcher 上传失败');
+                const r = await sh(deployCmd(uploaded), SHELL_TO);
+                if (!(r.ok && r.text.includes('__OK__'))) {
+                    throw new Error('patcher 安装失败：' + explainStageFailure(r.text, '部署命令未完成'));
+                }
+                const post = await computeChecksumSize(PATCHER);
+                if (post.checksum !== PATCHER_SHA || !(post.size > 0)) throw new Error('patcher 校验失败');
+                // 部署且校验通过后，清理 uploads 中的 patcher 临时文件
+                try { await run(`rm -f ${sq(UPLOADS + '/' + uploaded)}`); } catch { }
+                state.patcherReady = true;
+                return true;
+            } catch (e) {
+                state.patcherReady = false;
+                if (!silent) createToast(e.message || 'patcher 初始化失败', 'red', 4000);
+                console.error(e);
+                return false;
+            } finally {
+                state.patcherInstalling = null;
+            }
+        })();
+        return state.patcherInstalling;
+    };
+
+    // 带倒计时的确认弹窗（可选 checkbox 门控：需勾选 + 倒计时结束双重满足才可确认）
+    const confirmDialog = ({ title, bodyHtml, confirmText, cancelText = '取消', seconds = 0, danger = false, checkbox = false }) => new Promise((resolve) => {
+        const cid = MODAL + '_confirm';
+        const checkboxHtml = checkbox ? `
+                <label style="display:flex;align-items:center;gap:6px;margin:8px 0;font-size:.58rem;cursor:pointer;">
+                    <input type="checkbox" id="${NAME}_risk_ack">
+                    <span>我已了解风险并做好准备</span>
+                </label>` : '';
+        const { el, close } = createFixedToast(cid, `
+            <div class="ikc-confirm">
+                <div class="ikc-confirm-title" style="color:${danger ? '#ffb3b3' : '#ffd27a'}">${esc(title)}</div>
+                <div class="ikc-confirm-body">${bodyHtml}</div>${checkboxHtml}
+                <div class="ikc-confirm-btns">
+                    <button id="${cid}_cancel" class="ikc-btn ikc-btn-ghost">${esc(cancelText)}</button>
+                    <button id="${cid}_ok" class="ikc-btn ${danger ? 'ikc-btn-danger' : 'ikc-btn-success'}">${esc(confirmText)}</button>
+                </div>
+            </div>`);
+        const okBtn = el.querySelector('#' + cid + '_ok');
+        const cancelBtn = el.querySelector('#' + cid + '_cancel');
+        const ackBox = checkbox ? el.querySelector('#' + NAME + '_risk_ack') : null;
+        let timer = null;
+        let left = seconds;
+        let done = seconds <= 0;
+        const applyState = () => {
+            if (!done) { okBtn.textContent = `请等待 ${left}s`; okBtn.disabled = true; }
+            else { okBtn.textContent = confirmText; okBtn.disabled = ackBox ? !ackBox.checked : false; }
+        };
+        const tick = () => {
+            if (left > 0) { applyState(); left--; }
+            else { done = true; if (timer) clearInterval(timer); applyState(); }
+        };
+        if (seconds > 0) { tick(); timer = setInterval(tick, 1000); }
+        else applyState();
+        if (ackBox) ackBox.onchange = applyState;
+        okBtn.onclick = () => { if (okBtn.disabled) return; if (timer) clearInterval(timer); close(); resolve(true); };
+        cancelBtn.onclick = () => { if (timer) clearInterval(timer); close(); resolve(false); };
+    });
+
+    // ─── log ────────────────────────────────────────────────
+    const renderLogs = () => {
+        const el = document.querySelector('#' + MODAL + ' #ikc_log');
+        if (el) { el.textContent = state.logs.join('\n'); el.scrollTop = el.scrollHeight; }
+    };
+    const appendLog = (msg) => {
+        const now = new Date();
+        const p = (n) => String(n).padStart(2, '0');
+        state.logs.push(`[${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}] ${msg}`);
+        if (state.logs.length > 200) state.logs.shift();
+        renderLogs();
+    };
+    const setJob = (text) => {
+        const el = document.querySelector('#' + MODAL + ' #ikc_job');
+        if (el) el.textContent = text;
+    };
+
+    // ─── style ──────────────────────────────────────────────
+    const injectStyle = () => {
+        document.querySelector('#' + STYLE)?.remove();
+        const s = document.createElement('style');
+        s.id = STYLE;
+        s.textContent = `
+#${MODAL} .content{color:#e8ecf3;font-size:.72rem;line-height:1.55;}
+#${MODAL} .ikc-card{border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03));border-radius:14px;padding:10px 12px;margin-bottom:12px;}
+#${MODAL} .ikc-card-h{font-size:.72rem;font-weight:700;letter-spacing:.5px;margin-bottom:6px;color:#cfe0ff;display:flex;align-items:center;justify-content:space-between;}
+#${MODAL} .ikc-sub{font-size:.6rem;font-weight:400;color:#ffcf87;background:rgba(255,180,80,.12);padding:2px 8px;border-radius:20px;}
+#${MODAL} .ikc-row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:6px 0;}
+#${MODAL} .ikc-k{color:#9aa4b8;flex:0 0 auto;}
+#${MODAL} .ikc-imei{font-family:ui-monospace,Menlo,Consolas,monospace;color:#ffe08a;letter-spacing:1px;cursor:pointer;border-bottom:1px dashed rgba(255,224,138,.45);}
+.ikc-confirm-body code{color:#9fd0ff;font-family:ui-monospace,Menlo,Consolas,monospace;}
+#${MODAL} .ikc-patcher{font-size:.68rem;margin:6px 0;color:#c8d2e6;}
+.ikc-btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.ikc-btn{border-radius:8px;padding:6px 12px;font-size:.68rem;cursor:pointer;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:inherit;transition:background .15s,opacity .15s;}
+.ikc-btn:hover:not(:disabled){background:rgba(255,255,255,.14);}
+.ikc-btn:disabled{opacity:.35;cursor:not-allowed;}
+.ikc-btn-success{background:rgba(34,197,94,.22);border-color:rgba(34,197,94,.35);color:#86efac;}
+.ikc-btn-success:hover:not(:disabled){background:rgba(34,197,94,.35);}
+.ikc-btn-stop{background:rgba(249,115,22,.22);border-color:rgba(249,115,22,.35);color:#fdba74;}
+.ikc-btn-stop:hover:not(:disabled){background:rgba(249,115,22,.35);}
+.ikc-btn-danger{background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.3);color:#fca5a5;}
+.ikc-btn-danger:hover:not(:disabled){background:rgba(239,68,68,.3);}
+.ikc-btn-ghost{background:transparent;border-color:rgba(255,255,255,.12);opacity:.8;}
+.ikc-btn-ghost:hover:not(:disabled){opacity:1;background:rgba(255,255,255,.06);}
+#${MODAL} .ikc-input{width:100%;box-sizing:border-box;margin-top:10px;padding:5px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.18);color:inherit;font-size:.72rem;outline:none;font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:1px;}
+#${MODAL} .ikc-input:focus{border-color:rgba(99,102,241,.5);box-shadow:0 0 0 2px rgba(99,102,241,.12);}
+#${MODAL} .ikc-seg{display:inline-flex;background:rgba(0,0,0,.28);border-radius:8px;padding:3px;gap:3px;}
+#${MODAL} .ikc-seg-btn{border:none;background:transparent;color:#9aa4b8;padding:6px 12px;border-radius:6px;font-size:.68rem;cursor:pointer;transition:.15s;}
+#${MODAL} .ikc-seg-btn.ikc-on{background:rgba(90,150,255,.28);color:#cfe0ff;font-weight:700;}
+#${MODAL} .ikc-seg-btn:disabled{opacity:.5;cursor:not-allowed;}
+#${MODAL} .ikc-job{margin-top:10px;font-size:.66rem;color:#9aa4b8;}
+#${MODAL} .ikc-job span{color:#8ff0a7;}
+#${MODAL} .ikc-log{box-sizing:border-box;width:100%;min-height:120px;max-height:150px;overflow-y:auto;font-size:.62rem;line-height:1.6;background:rgba(0,0,0,.3);color:#ccc;border-radius:8px;padding:6px;font-family:"SF Mono",Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all;}
+.ikc-confirm{pointer-events:all;width:80vw;max-width:300px;background:rgba(24,28,38,.96);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px;color:#e8ecf3;backdrop-filter:blur(12px);}
+.ikc-confirm-title{font-size:.72rem;font-weight:800;margin-bottom:10px;}
+.ikc-confirm-body{font-size:.68rem;line-height:1.6;color:#d4dcec;word-break:break-all;}
+.ikc-confirm-btns{display:flex;gap:8px;margin-top:10px;}
+@media (max-width:720px){#${MODAL}{width:95%!important;}}
+`;
+        document.head.appendChild(s);
+    };
+
+    // ─── render ─────────────────────────────────────────────
+    const render = () => `
+<div class="ikc-card">
+    <div class="ikc-card-h">基带修补</div>
+    <div class="ikc-row" style="justify-content:space-between;">
+        <span class="ikc-patcher" id="ikc_patcher_status">修补工具未安装</span>
+        <button class="ikc-btn ikc-btn-success" id="ikc_patcher_btn">安装修补工具</button>
+    </div>
+    <div class="ikc-btns">
+        <button class="ikc-btn ikc-btn-ghost" id="ikc_export_btn">导出基带</button>
+        <button class="ikc-btn ikc-btn-danger" id="ikc_import_btn">导入基带</button>
+        <button class="ikc-btn ikc-btn-danger" id="ikc_patch_btn">一键修补</button>
+    </div>
+    <div class="ikc-job">任务状态：<span id="ikc_job">空闲</span></div>
+    <input type="file" id="ikc_import_file" accept=".img,.bin,application/octet-stream" style="display:none" />
+</div>
+<div class="ikc-card">
+    <div class="ikc-card-h">改串 <span class="ikc-sub">建议先完成基带修补</span></div>
+    <div class="ikc-row">
+        <span class="ikc-k">槽位</span>
+        <span class="ikc-seg">
+            <button class="ikc-seg-btn ikc-on" id="ikc_slot0" data-slot="0">SIM 1 · 0</button>
+            <button class="ikc-seg-btn" id="ikc_slot1" data-slot="1">SIM 2 · 1</button>
+        </span>
+    </div>
+    <div class="ikc-row"><span class="ikc-k">当前 IMEI</span><span class="ikc-imei" id="ikc_imei_cur" title="点击复制串号">—</span></div>
+    <input class="ikc-input" id="ikc_imei_input" maxlength="15" inputmode="numeric" placeholder="输入新 IMEI（1-15 位数字）" />
+    <div class="ikc-btns">
+        <button class="ikc-btn ikc-btn-ghost" id="ikc_query_btn">查串</button>
+        <button class="ikc-btn ikc-btn-ghost" id="ikc_squery_btn">强力查串</button>
+        <button class="ikc-btn ikc-btn-ghost" id="ikc_rand_btn">随机</button>
+        <button class="ikc-btn ikc-btn-success" id="ikc_change_btn">改串</button>
+        <button class="ikc-btn ikc-btn-danger" id="ikc_reboot_btn">重启设备</button>
+    </div>
+</div>
+<div class="ikc-card">
+    <div class="ikc-card-h">操作日志 <button class="ikc-btn ikc-btn-ghost" id="ikc_clear_log_btn" style="padding:2px 10px;font-size:.58rem;">清空日志</button></div>
+    <div class="ikc-log" id="ikc_log"></div>
+</div>`;
+
+    const updateDisabled = () => {
+        const root = document.querySelector('#' + MODAL);
+        if (!root) return;
+        const exportBtn = root.querySelector('#ikc_export_btn');
+        if (exportBtn) exportBtn.disabled = state.busy;
+        ['#ikc_import_btn', '#ikc_patch_btn', '#ikc_patcher_btn'].forEach((s) => {
+            const b = root.querySelector(s);
+            if (b) b.disabled = state.busy;
+        });
+        ['#ikc_query_btn', '#ikc_squery_btn', '#ikc_rand_btn', '#ikc_change_btn', '#ikc_reboot_btn', '#ikc_slot0', '#ikc_slot1', '#ikc_imei_input'].forEach((s) => {
+            const b = root.querySelector(s);
+            if (b) b.disabled = state.busy;
+        });
+    };
+    const setBusy = (flag) => { state.busy = flag; updateDisabled(); };
+
+    const refreshStatusUI = () => {
+        const root = document.querySelector('#' + MODAL);
+        if (!root) return;
+        const patcherEl = root.querySelector('#ikc_patcher_status');
+        if (patcherEl) patcherEl.innerHTML = state.patcherReady ? `<span style="color:#8ff0a7;">修补工具已安装</span>` : `修补工具未安装`;
+        const pBtn = root.querySelector('#ikc_patcher_btn');
+        if (pBtn) {
+            pBtn.textContent = state.patcherReady ? '卸载工具' : '安装工具';
+            pBtn.className = state.patcherReady ? 'ikc-btn ikc-btn-ghost' : 'ikc-btn ikc-btn-success';
+        }
+        const curEl = root.querySelector('#ikc_imei_cur');
+        if (curEl) curEl.textContent = state.currentImei ? state.currentImei : '—';
+        root.querySelector('#ikc_slot0')?.classList.toggle('ikc-on', state.atSlot === '0');
+        root.querySelector('#ikc_slot1')?.classList.toggle('ikc-on', state.atSlot === '1');
+        updateDisabled();
+    };
+
+    const ensurePartition = async () => {
+        if (state.partition) return state.partition;
+        setJob('读取设备环境...');
+        await detectEnv();
+        await detectPartition();
+        if (!state.partition) throw new Error('未找到 nr_modem 分区，本设备可能不支持');
+        return state.partition;
+    };
+
+    const refresh = async () => {
+        if (state._refreshing) return;
+        state._refreshing = true;
+        try {
+            const chk = await run(`[ -f ${sq(PATCHER)} ] && echo Y`, SHELL_TO);
+            state.patcherReady = ((chk && chk.content) || '').includes('Y');
+            refreshStatusUI();
+        } catch (e) { console.error(e); }
+        finally { state._refreshing = false; }
+    };
+
+    // ─── modem 操作 ─────────────────────────────────────────
+    const doExport = async () => {
+        if (state.busy) { createToast('正在执行任务，请稍候', 'pink'); return; }
+        setBusy(true);
+        setJob('正在检测设备环境...');
+        try { await ensurePartition(); } catch (e) { setBusy(false); setJob('空闲'); createToast(e.message, 'red', 3000); return; }
+        setJob('正在导出 modem...');
+        try {
+            const part = getPartPath();
+            const name = `nr_modem_${state.slot}_${ts()}.img`;
+            const r = await sh(exportCmd(part, UPLOADS + '/' + name), DD_TO);
+            if (!(r.ok && r.text.includes('__OK__'))) throw new Error('导出失败，请检查 root 权限和分区路径');
+            downloadUrl('/api/uploads/' + name, name);
+            appendLog('导出完成：' + name);
+            createToast('已开始下载基带镜像', 'green');
+        } catch (e) {
+            console.error(e);
+            appendLog('导出失败：' + (e.message || e));
+            createToast(e.message || '导出失败，请检查 root 权限和分区路径', 'red', 4000);
+        } finally {
+            setBusy(false);
+            setJob('空闲');
+            refreshStatusUI();
+        }
+    };
+
+    const doImport = async (file) => {
+        if (state.busy || !file) return;
+        setBusy(true);
+        setJob('正在检测设备环境...');
+        try { await ensurePartition(); } catch (e) { setBusy(false); setJob('空闲'); createToast(e.message, 'red', 3000); return; }
+        try {
+            setJob('正在计算本地校验...');
+            const localSum = await sha256File(file);
+            const localSize = file.size;
+            setJob('正在上传 modem 镜像...');
+            const uploaded = await uploadFileKano(file, true);
+            if (!uploaded) throw new Error('上传失败');
+            const imgPath = UPLOADS + '/' + uploaded;
+            setJob('正在校验上传文件...');
+            const remote = await computeChecksumSize(imgPath);
+            if (remote.checksum === '__NO_CHECKSUM__' || !remote.checksum) throw new Error('设备侧缺少 SHA-256 命令，已阻止导入');
+            if (remote.checksum !== localSum || remote.size !== localSize) throw new Error('上传文件 hash 或大小不一致，已阻止导入');
+            const ok = await confirmDialog({
+                title: '确认导入基带',
+                danger: true,
+                seconds: 6,
+                confirmText: '确认刷入',
+                bodyHtml: `该操作会使用 <code>dd</code> 直接覆盖分区内容，存在较高风险。<br>
+分区：<code>${esc(state.partition.name)}</code>（槽位 ${esc(state.slot)}）<br>
+by-name：<code>${esc(state.partition.linkPath)}</code><br>
+块设备：<code>${esc(state.partition.realPath || state.partition.linkPath)}</code><br>
+镜像：<code>${esc(uploaded)}</code><br>
+SHA-256：<code>${esc(localSum)}</code>`,
+            });
+            if (!ok) { createToast('已取消导入', 'pink', 2000); return; }
+            setJob('正在导入 modem...');
+            const r = await sh(importCmd(imgPath, getPartPath(), localSum, localSize), DD_TO);
+            if (!(r.ok && r.text.includes('__OK__'))) throw new Error('导入失败，请检查镜像和分区写入权限');
+            appendLog('modem 导入完成：' + uploaded);
+            createToast('导入完成，重启后生效', 'green');
+        } catch (e) {
+            console.error(e);
+            appendLog('导入失败：' + (e.message || e));
+            createToast(e.message || '导入失败', 'red', 4000);
+        } finally {
+            setBusy(false);
+            setJob('空闲');
+            refreshStatusUI();
+        }
+    };
+
+    const classifyPatch = (text) => {
+        if (/Patch complete/i.test(text)) return '修补完成';
+        if (/No changes needed|already patched/i.test(text)) return '目标可能已修补';
+        return '修补状态：无法判定';
+    };
+
+    const doPatch = async () => {
+        if (state.busy) { createToast('正在执行任务，请稍候', 'pink'); return; }
+        setBusy(true);
+        setJob('正在检测设备环境...');
+        try { await ensurePartition(); } catch (e) { setBusy(false); setJob('空闲'); createToast(e.message, 'red', 3000); return; }
+        try {
+            if (!state.patcherReady) { setBusy(false); setJob('空闲'); createToast('请先安装修补工具', 'pink'); return; }
+            const avb = state.avb || {};
+            const modemAvbProtected = avb.hasVbmetaModem;
+
+            let patchBodyHtml = `<div style="font-size:.64rem;line-height:1.7;margin-bottom:8px;padding:8px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);">
+<b>环境检测</b><br>
+Root 环境：${avb.hasRoot ? '<span style="color:#4ade80;">已检测到</span>' : '<span style="color:#fca5a5;">未检测到</span>'}<br>
+AVB device_state：<code>${esc(avb.deviceState || '未知')}</code><br>
+AVB verifiedbootstate：<code>${esc(avb.bootState || '未知')}</code><br>
+vbmeta_modem 分区：${avb.hasVbmetaModem ? '<span style="color:#fbbf24;">存在（modem 受 AVB 保护）</span>' : '<span style="color:#4ade80;">不存在（modem 不在验证链中）</span>'}
+<div style="margin-top:4px;font-size:.58rem;color:#9aa4b8;">以上信息仅供参考，可能不反映 modem 分区实际保护状态。</div>
+</div>`;
+
+            if (modemAvbProtected) {
+                patchBodyHtml += `<div style="margin-bottom:8px;padding:8px;border-radius:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5;font-weight:700;line-height:1.6;">
+⚠️ 检测到 modem 分区在 AVB 验证链中！直接修补基带有几率开机无限重启，请确保设备已禁用 AVB 校验后再操作。</div>`;
+            }
+
+            patchBodyHtml += `分区：<code>${esc(state.partition.name || '未知')}</code>（槽位 ${esc(state.slot)}）<br>
+by-name：<code>${esc(state.partition.linkPath || '读取失败')}</code><br>
+块设备：<code>${esc(state.partition.realPath || state.partition.linkPath || '读取失败')}</code><br><br>
+接下来会尝试修补基带，未备份时请务必不要继续！
+<div style="margin-top:10px;color:#fca5a5;line-height:1.7;">
+⚠️ 新版u20（wifi6）原厂自带显串，无需修补基带！<br>
+⚠️ 请务必提前保存旧串号和备份基带，防止无法复原！<br>
+⚠️ 强烈建议插入一张普通 SIM 卡并切换到该卡槽，再进行基带修补，否则内置卡可能因串号变更被运营商注销报废！
+</div>`;
+
+            const backupOk = await confirmDialog({
+                title: '修补前确认',
+                danger: modemAvbProtected,
+                seconds: modemAvbProtected ? 10 : 8,
+                checkbox: true,
+                confirmText: '已确认，继续',
+                bodyHtml: patchBodyHtml,
+            });
+            if (!backupOk) { createToast('已取消修补', 'pink', 2000); return; }
+
+            setBusy(true);
+            setJob('正在准备 patcher...');
+            const prep = await sh(prepareCmd(), SHELL_TO);
+            if (!(prep.ok && prep.text.includes('__OK__'))) {
+                appendLog(`patcher 准备原始返回：${JSON.stringify(prep.text || prep.raw || '')}`);
+                throw new Error('patcher 准备失败：' + explainStageFailure(prep.text, '准备命令未完成'));
+            }
+
+            setJob('正在提取并修补 modem...');
+            const part = getPartPath();
+            const pr = await sh(patchCmd(part), DD_TO);
+            if (pr.text) appendLog('patcher 输出：\n' + pr.text.replace(/__OK__\s*$/, '').trim());
+            if (!(pr.ok && pr.text.includes('__OK__'))) {
+                if (/No changes needed|already patched/i.test(pr.text)) {
+                    throw new Error('未产出修补后的镜像，可能目标基带已经修补过！');
+                }
+                if (/ambiguous or missing|not matched|old=0, ?new=0/i.test(pr.text)) {
+                    throw new Error('基带已被修改过，本工具无法再次修补，可尝试直接改串。');
+                }
+                throw new Error(pr.text || '无 patcher 输出');
+            }
+            appendLog(classifyPatch(pr.text));
+
+            setJob('正在计算 patched 镜像校验...');
+            const info = await computeChecksumSize(OUTPUT);
+            if (info.checksum === '__NO_CHECKSUM__' || !info.checksum) throw new Error('当前环境不可用：缺少 SHA-256 能力');
+
+            const flushOk = await confirmDialog({
+                title: '确认刷入修补后的基带',
+                danger: true,
+                seconds: 6,
+                confirmText: '确认刷入',
+                bodyHtml: `<div style="background:rgba(255,70,70,.12);border:1px solid rgba(255,90,90,.28);border-radius:8px;padding:8px;margin-bottom:8px;">
+这是直接覆盖 <code>${esc(state.partition.name)}</code> 分区的高风险操作。<br>
+如果当前基带已经修补过，或修补工具没有产出新镜像，本流程会停止，不会强行刷入。
+</div>
+by-name：<code>${esc(state.partition.linkPath)}</code><br>
+块设备：<code>${esc(state.partition.realPath || state.partition.linkPath)}</code><br>
+patched 文件：<code>${esc(OUTPUT)}</code><br>
+文件大小：<code>${esc(String(info.size))}</code><br>
+SHA-256：<code>${esc(info.checksum)}</code>`,
+            });
+            if (!flushOk) { createToast('已取消刷入', 'pink', 2000); return; }
+
+            setJob('正在刷入 patched modem...');
+            const fr = await sh(flushCmd(part, info.checksum), DD_TO);
+            if (!(fr.ok && fr.text.includes('__OK__'))) throw new Error('刷入失败，请检查分区写入权限');
+            appendLog('修补后的 modem 已刷入');
+            createToast('修补后的基带已刷入', 'green');
+        } catch (e) {
+            console.error(e);
+            appendLog('修补失败：' + (e.message || e));
+            createToast(e.message || '修补失败', 'red', 5000);
+        } finally {
+            setBusy(false);
+            setJob('空闲');
+            refreshStatusUI();
+        }
+    };
+
+    // ─── AT 改串 ────────────────────────────────────────────
+    const parseImeiFromAt = (text) => {
+        const cleaned = String(text || '').replace(/OK\s*$/i, '').replace(/ERROR.*$/i, '').trim();
+        const m = cleaned.match(/(\d{15})/);
+        return m ? m[1] : '';
+    };
+    const parseImeiFromReader = (text, slot) => {
+        const map = {};
+        const re = /IMEI\s*(\d)\s*[:：]?\s*(\d{15})/gi;
+        let m;
+        while ((m = re.exec(text || ''))) map[m[1]] = m[2];
+        const key = String(Number(slot) + 1);
+        return map[key] || '';
+    };
+
+    const executeATCommand = async (command, slot = null) => {
+        const targetSlot = slot == null ? '0' : String(slot);
+        try {
+            const commandEnc = encodeURIComponent(command);
+            return await (
+                await fetch(`${KANO_baseURL}/AT?command=${commandEnc}&slot=${targetSlot}`, {
+                    headers: common_headers,
+                })
+            ).json();
+        } catch (e) {
+            return null;
+        }
+    };
+
+    const execAT = async (command, slot) => {
+        if (!command) return { ok: false, data: null, error: 'AT 指令为空' };
+        try {
+            const res = await executeATCommand(command, slot);
+            if (!res) return { ok: false, data: null, error: 'AT 请求无响应' };
+            if (res.error) return { ok: false, data: null, error: String(res.error) };
+            return { ok: true, data: res.result, error: '' };
+        } catch (e) {
+            return { ok: false, data: null, error: e?.message || String(e) };
+        }
+    };
+
+    const queryImeiByCgSn = async (slot) => {
+        const res = await execAT('AT+CGSN', slot);
+        const raw = String(res?.data || '');
+        return {
+            ok: !!res?.ok,
+            raw,
+            error: res?.error || '',
+            imei: parseImeiFromAt(raw),
+        };
+    };
+
+    const logQueryResult = (label, slot, result) => {
+        const raw = result.raw || result.error || '';
+        appendLog(`[${label}] 槽位 ${slot} 当前 IMEI：${result.imei || '未解析'} 原始返回 ok=${!!result.ok}：${JSON.stringify(raw)}`);
+    };
+
+    const atQuery = async (strong) => {
+        if (state.busy) return;
+        setBusy(true);
+        setJob(strong ? '正在强力查串...' : '正在查串...');
+        const slot = state.atSlot;
+        let queryResult = null;
+        try {
+            if (strong) {
+                const r = await run(sq(IMEI_READER), AT_TO);
+                const raw = (r && r.content) || '';
+                queryResult = {
+                    ok: !!(r && r.success),
+                    raw,
+                    error: '',
+                    imei: parseImeiFromReader(raw, slot),
+                };
+            } else {
+                queryResult = await queryImeiByCgSn(slot);
+            }
+            logQueryResult(strong ? '强力查串' : '普通查串', slot, queryResult);
+            const imei = queryResult.imei;
+            if (!imei) throw new Error(strong ? '强力查串未解析到 IMEI（请确认已启用高级功能）' : '查串未解析到 IMEI，可尝试强力查串');
+            state.currentImei = imei;
+            createToast(' 槽位 ' + slot + ' 当前 IMEI：' + imei, 'green');
+        } catch (e) {
+            console.error(e);
+            if (!queryResult) {
+                logQueryResult(strong ? '强力查串' : '普通查串', slot, {
+                    ok: false,
+                    raw: '',
+                    error: e.message || String(e),
+                    imei: '',
+                });
+            }
+            createToast(e.message || '查串失败', 'red', 4000);
+        } finally {
+            setBusy(false);
+            setJob('空闲');
+            refreshStatusUI();
+        }
+    };
+
+    const atChange = async () => {
+        if (state.busy) return;
+        const root = document.querySelector('#' + MODAL);
+        const raw = (root?.querySelector('#ikc_imei_input')?.value || '').trim();
+        if (!raw) return createToast('请输入 IMEI 号码', 'red', 3000);
+        if (/[^\d]/.test(raw)) return createToast('IMEI 只能包含数字', 'red', 3000);
+        const imei = raw.replace(/[^\d]/g, '');
+        const slot = state.atSlot;
+
+        // 15 位：Luhn 校验
+        if (imei.length === 15) {
+            if (!luhnValid(imei)) {
+                const proceed = await confirmDialog({
+                    title: 'IMEI Luhn 校验未通过',
+                    danger: true,
+                    seconds: 3,
+                    confirmText: '仍要写入',
+                    bodyHtml: `<div style="color:#fca5a5;font-weight:700;margin-bottom:6px;">该 IMEI 未通过 Luhn 校验，可能是无效串号。</div>
+写入无效串号可能导致设备无法正常注册网络。<br>
+IMEI：<code>${esc(imei)}</code><br>槽位：<code>${esc(slot)}</code>`,
+                });
+                if (!proceed) return;
+            }
+        } else {
+            // 1-14 位：短号警告
+            const proceed = await confirmDialog({
+                title: '非标准 IMEI 长度',
+                danger: true,
+                seconds: 3,
+                confirmText: '仍要写入',
+                bodyHtml: `<div style="color:#fca5a5;font-weight:700;margin-bottom:6px;">您输入的不是标准 15 位 IMEI（当前 ${imei.length} 位），部分设备可能无法正常识别或上报。</div>
+IMEI：<code>${esc(imei)}</code><br>槽位：<code>${esc(slot)}</code>`,
+            });
+            if (!proceed) return;
+        }
+
+        setBusy(true);
+        try {
+            setJob('正在查询当前串号...');
+            let currentImei = '';
+            try {
+                const currentResult = await queryImeiByCgSn(slot);
+                logQueryResult('改串前查串', slot, currentResult);
+                currentImei = currentResult.imei;
+            } catch (e) { console.error(e); }
+            if (currentImei) { state.currentImei = currentImei; refreshStatusUI(); }
+            setJob('等待确认...');
+
+            const ok = await confirmDialog({
+                title: '确认改串',
+                danger: true,
+                seconds: 5,
+                confirmText: '确认改串',
+                bodyHtml: `当前串号：<code>${esc(currentImei || '查询失败')}</code><br>写入新串号：<code>${esc(imei)}</code><br>槽位：<code>${esc(slot)}</code><br>
+若基带未修补，写入可能无效。改串完成后建议重启设备生效。
+<div style="margin-top:10px;color:#fca5a5;line-height:1.7;">⚠️ 若您的物联卡绑定了原串号，改串后将自动注销报废！请确保已备份或更换未绑定的卡！</div>`,
+            });
+            if (!ok) { createToast('已取消改串', 'pink', 2000); return; }
+            setJob('正在改串...');
+            const atCmd = `AT+SPIMEI=${slot},"${imei}"`;
+            const r = await execAT(atCmd, slot);
+            const out = String(r?.data || '');
+            const transportOk = !!r?.ok;
+            const explicitError = /\bERROR\b/i.test(out);
+            const hasOk = /\bOK\b/i.test(out);
+            appendLog(`改串原始返回 success=${transportOk}：${JSON.stringify(out || r?.error || '')}`);
+            if (!transportOk || explicitError) {
+                throw new Error('改串指令执行失败：' + (out.trim() || r?.error || '无输出'));
+            }
+            if (!hasOk) {
+                appendLog('改串返回未包含 OK，但未检测到 ERROR，继续通过查串结果确认');
+            }
+            appendLog(`槽位 ${slot} 已下发改串：${imei}`);
+            try {
+                const verifyResult = await queryImeiByCgSn(slot);
+                logQueryResult('改串后查串', slot, verifyResult);
+                const verifyImei = verifyResult.imei;
+                if (verifyImei) {
+                    state.currentImei = verifyImei;
+                    refreshStatusUI();
+                    if (verifyImei === imei) {
+                        appendLog(`改串后已读到目标 IMEI：${verifyImei}`);
+                    } else {
+                        appendLog(`改串后当前 IMEI：${verifyImei}，可能需要重启后生效`);
+                    }
+                } else {
+                    appendLog('改串后暂未解析到 IMEI，可能需要重启后再查');
+                }
+            } catch (e) {
+                appendLog('改串后查串失败：' + (e.message || e));
+            }
+            const doReboot = await confirmDialog({
+                title: 'IMEI 修改完成',
+                danger: true,
+                seconds: 3,
+                confirmText: '立即重启',
+                cancelText: '稍后重启',
+                bodyHtml: `IMEI 修改完成，重启后生效。
+<div style="margin-top:10px;color:#fca5a5;line-height:1.7;">⚠️ 建议在确认串号修改成功之前不要插卡！请先重启设备，待串号生效后，再插入需要使用的 SIM 卡。</div>`,
+            });
+            if (doReboot) {
+                appendLog('设备正在重启…');
+                createToast('设备正在重启…', 'green');
+                try { await runShellWithRoot('reboot'); } catch (e) { console.error(e); }
+            } else {
+                appendLog('请手动重启设备以生效');
+            }
+        } catch (e) {
+            console.error(e);
+            appendLog('改串失败：' + (e.message || e));
+            createToast(e.message || '改串失败', 'red', 4000);
+        } finally {
+            setBusy(false);
+            setJob('空闲');
+            refreshStatusUI();
+        }
+    };
+
+    const atReboot = async () => {
+        if (state.busy) return;
+        const ok = await confirmDialog({
+            title: '确认重启设备',
+            danger: true,
+            seconds: 3,
+            confirmText: '重启',
+            bodyHtml: '设备将立即重启以使基带更改生效，当前网络连接会中断。',
+        });
+        if (!ok) return;
+        setBusy(true);
+        setJob('正在重启设备...');
+        appendLog('已发送重启指令');
+        createToast('设备正在重启…', 'green');
+        try { await runShellWithRoot('reboot'); } catch (e) { console.error(e); }
+        finally { setBusy(false); setJob('空闲'); }
+    };
+
+    // 安装 patcher（手动部署）/ 卸载 patcher（删除专属 TMP 目录与 uploads 缓存）
+    const doInstallPatcher = async () => {
+        if (state.busy) { createToast('正在执行任务，请稍候', 'pink'); return; }
+        setBusy(true);
+        setJob('正在安装 patcher...');
+        try {
+            const ok = await installPatcher(false);
+            if (ok) {
+                appendLog('patcher 安装成功');
+                createToast('修补工具已安装', 'green');
+            }
+        } finally {
+            setBusy(false);
+            setJob('空闲');
+            refreshStatusUI();
+        }
+    };
+
+    const doUninstallPatcher = async () => {
+        if (state.busy) { createToast('正在执行任务，请稍候', 'pink'); return; }
+        setBusy(true);
+        setJob('正在卸载 patcher...');
+        try {
+            await run(`rm -f ${UPLOADS}/*.img ${UPLOADS}/patcher* 2>/dev/null; rm -rf ${sq(TMP)} 2>/dev/null`);
+            state.patcherReady = false;
+            appendLog('patcher 及缓存已卸载');
+            createToast('已卸载修补工具并清理缓存', 'green');
+            refreshStatusUI();
+        } catch (e) {
+            console.error(e);
+            appendLog('卸载失败：' + (e.message || e));
+            createToast('卸载失败：' + (e.message || e), 'red', 4000);
+        } finally {
+            setBusy(false);
+            setJob('空闲');
+            refreshStatusUI();
+        }
+    };
+
+    // ─── bind ───────────────────────────────────────────────
+    const bind = () => {
+        const root = document.querySelector('#' + MODAL);
+        if (!root) return;
+        root.querySelector('#ikc_export_btn').onclick = doExport;
+        const fileInput = root.querySelector('#ikc_import_file');
+        root.querySelector('#ikc_import_btn').onclick = () => {
+            if (state.busy) { createToast('正在执行任务，请稍候', 'pink'); return; }
+            fileInput.value = '';
+            fileInput.click();
+        };
+        fileInput.onchange = () => {
+            const f = fileInput.files && fileInput.files[0];
+            if (f) doImport(f);
+        };
+        root.querySelector('#ikc_patch_btn').onclick = doPatch;
+        root.querySelector('#ikc_slot0').onclick = () => { state.atSlot = '0'; state.currentImei = ''; refreshStatusUI(); };
+        root.querySelector('#ikc_slot1').onclick = () => { state.atSlot = '1'; state.currentImei = ''; refreshStatusUI(); };
+        root.querySelector('#ikc_imei_cur')?.addEventListener('click', () => copyText(state.currentImei));
+        root.querySelector('#ikc_query_btn').onclick = () => atQuery(false);
+        root.querySelector('#ikc_squery_btn').onclick = () => atQuery(true);
+        root.querySelector('#ikc_rand_btn').onclick = () => {
+            const inp = root.querySelector('#ikc_imei_input');
+            if (inp && !inp.disabled) inp.value = randomImei();
+        };
+        root.querySelector('#ikc_change_btn').onclick = atChange;
+        root.querySelector('#ikc_reboot_btn').onclick = atReboot;
+        root.querySelector('#ikc_patcher_btn').onclick = () => state.patcherReady ? doUninstallPatcher() : doInstallPatcher();
+        root.querySelector('#ikc_clear_log_btn').onclick = () => {
+            state.logs = [];
+            renderLogs();
+            appendLog('日志已清空');
+        };
+    };
+    // ─── help ───────────────────────────────────────────────
+    const HELP_TEXT = '<b>这是什么</b><br>' +
+        '· 本插件用来给设备的“基带”解开限制并修改串号（IMEI，相当于设备的“身份证号”）。<br><br>' +
+        '<b>怎么用</b><br>' +
+        '· <b>一键修补</b>：改串前必须先点它，解开改串限制；不先修补就改，往往改了不生效、设备认不出，只需做一次。<br>' +
+        '· <b>导出</b>=备份当前状态（动手前建议先存一份）；<b>导入</b>=还原备份，或刷入自己准备好的固件。<br>' +
+        '· 改串步骤：选“卡槽”→点“查串”读出当前串号→填新串号（或点“随机”）→点“改串”→重启后生效（普通查串和强力查串结果一致）<br>' +
+        '· 改完、新号还没确认生效前，先别插绑定原串号的物联卡，以免用不了。<br>' +
+        '· 万一改完反复重启开不了机，用之前“导出”的备份，借助其他工具还原即可。<br><br>' +
+        '<div style="margin-top:6px;padding:6px 8px;border-radius:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);font-size:.6rem;color:#fca5a5;line-height:1.6;">' +
+        '<b>免责声明</b><br>' +
+        '修补基带、改串号属高风险操作，请在符合当地法律法规前提下使用；因个人使用导致的设备损坏、串号异常、被运营商注销等一切后果，由使用者自行承担。' +
+        '</div>';
+
+    const showHelp = () => {
+        const { el, close } = createFixedToast('ikc_help_toast', `
+            <div style="pointer-events:all;width:80vw;max-width:300px">
+                <div class="title" style="margin:0">使用说明</div>
+                <div style="margin:10px 0;font-size:.68rem;line-height:1.6">${HELP_TEXT}</div>
+                <div style="text-align:right">
+                    <button style="font-size:.64rem" id="ikc_help_dismiss">关闭</button>
+                </div>
+            </div>`);
+        el.querySelector('#ikc_help_dismiss').onclick = () => close();
+    };
+
+    const injectHelpButton = (modalEl) => {
+        const titleSpan = modalEl.querySelector('.title > span');
+        if (!titleSpan) return;
+        const helpBtn = document.createElement('button');
+        helpBtn.textContent = '?';
+        helpBtn.style.cssText = 'width:16px;height:16px;border-radius:50%;padding:0;font-size:.5rem;line-height:16px;text-align:center;cursor:pointer;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);margin-left:8px;vertical-align:middle;flex-shrink:0;';
+        helpBtn.onclick = (e) => { e.stopPropagation(); showHelp(); };
+        titleSpan.appendChild(helpBtn);
+    };
+
+    // ─── mount ──────────────────────────────────────────────
+    const openModal = async () => {
+        injectStyle();
+        const { close: closeLoading } = createFixedToast('ikc_loading', '初始化中...');
+        document.querySelector('#' + MODAL)?.remove();
+        try {
+            const { el, id } = createModal({
+                name: MODAL,
+                title: '一键修补基带+改串',
+                content: render(),
+                showConfirm: false,
+                maxWidth: '420px',
+                contentStyle: 'max-height: 72vh;',
+                onClose: () => {
+                    if (state.busy) { createToast('操作进行中，请等待完成后再关闭', 'pink'); return false; }
+                    return true;
+                },
+            });
+            showModal(id);
+            bind();
+            renderLogs();
+            updateDisabled();  // bind 后立即刷新按钮状态，state 未就绪时按钮禁用
+            injectHelpButton(el);
+            refresh();
+        } finally {
+            closeLoading();
+        }
+    };
+
+    const btn = document.createElement('button');
+    btn.id = ENTRY_ID;
+    btn.textContent = '一键修补基带+改串';
+    btn.onclick = async () => {
+        const who = await run('whoami', 3000);
+        if (!((who && who.content) || '').toLowerCase().includes('root')) {
+            createToast('请先启用高级功能', 'red');
+            return;
+        }
+        openModal();
+    };
+
+    let tries = 0;
+    const mountBtn = () => {
+        const c = document.querySelector('.actions-buttons');
+        if (c) { if (!c.querySelector('#' + ENTRY_ID)) c.appendChild(btn); return; }
+        if (tries++ < 40) setTimeout(mountBtn, 150);
+    };
+    mountBtn();
+    } catch (e) {
+        console.error('[ikc] unexpected error', e);
+        try { createToast && createToast('插件异常：' + (e && e.message || e), 'red', 5000); } catch (_) {}
+    }
+})();
+//</script>

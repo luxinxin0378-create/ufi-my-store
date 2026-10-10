@@ -1,0 +1,1357 @@
+<script>
+    (() => {
+        const container = document.querySelector('.functions-container');
+        container.insertAdjacentHTML("afterend", `
+<style>
+    @media (max-width: 340px) {
+        .kfk_cards {
+            grid-template-columns: 1fr !important;
+        }
+    }
+    
+</style>
+<div id="SIGNAL_MONITOR" class="sSIGNAL_MONITOR" style="width: 100%; padding:0;margin-top: 8px;padding-left:0">
+    <div class="title" style="margin: 4px 0; color: var(--dark-text-color); display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <strong style="color:var(--dark-text-color); font-size: 14px;">📶 5G信号监控</strong>
+            <div style="display: inline-block;" id="collapse_signal_btn"></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-right: 4px;">
+            <select id="update_interval_select" class="btn" style="padding: 3px 5px;paddding-left:0; font-size: .75rem; background: #333; color: var(--dark-text-color); border: 1px solid rgba(255,255,255,0.2); border-radius: 3px;">
+                <option value="500">0.5秒</option>
+                <option value="1000" selected>1秒</option>
+                <option value="3000">3秒</option>
+                <option value="5000">5秒</option>
+                <option value="10000">10秒</option>
+            </select>
+            <button id="refresh_signal_btn" class="btn" style="padding: 3px 5px; font-size: .75rem;">刷新</button>
+            <button id="auto_monitor_btn" class="btn" style="padding: 3px 5px; font-size: .75rem; background: #4caf5075;">监控中</button>
+        </div>
+    </div>
+
+    <div class="collapse" id="collapse_signal" data-name="close" style="height: 0px; overflow: hidden;">
+        <div class="collapse_box">
+            <!-- 状态指示器 -->
+            <div style="margin-bottom: 8px; padding: 4px; background: rgba(255,255,255,0.05); border-radius: 4px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: .77rem; color: var(--dark-text-color);">
+                    <span>数据源: <span id="data_source_indicator" style="color:#52ef58;">实时解析</span></span>
+                    <span>更新: <span id="last_update_time">-</span></span>
+                    <span>样本数: <span id="sample_count">0</span></span>
+                </div>
+            </div>
+
+            <!-- 新版3卡片布局 -->
+            <div class="kfk_cards" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px;overflow-x: auto;">
+                <!-- 信号强度卡片 -->
+                <div  class="kfk_card" style="padding: .55rem; background: linear-gradient(135deg, rgba(76,175,80,0.15) 0%, rgba(76,175,80,0.05) 100%); border-radius: 10px; border: 1px solid rgba(76,175,80,0.3); position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                    <div style="position: absolute; top: 8px; right: 8px; width: 6px; height: 6px; border-radius: 50%; background: #52ef58; box-shadow: 0 0 6px #52ef58;"></div>
+                    <div style="text-align: center; margin-bottom: 10px;">
+                        <div style="font-size: .75rem; color: #52ef58; margin-bottom: 4px; font-weight: 600;">信号强度</div>
+                        <div id="signal_power" style="font-size: 20px; font-weight: bold; color: #52ef58; margin-bottom: 4px; ">- dBm</div>
+                        <div style="font-size: .8rem; color: #52ef58; opacity: 0.8;">RSRP</div>
+                    </div>
+                    <div style="display: flex; justify-content: center; margin-bottom: 8px;">
+                        <div id="status_dots_power" style="display: flex; gap: 3px; align-items: center; height: 10px; overflow: hidden;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: .8rem; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 4px;">
+                        <div style="color: var(--dark-text-color); font-weight: bold;" id="signal_quality">检测中</div>
+                        <div style="width: 1px; background: rgba(255,255,255,0.2);"></div>
+                        <div style="color: var(--dark-text-color); font-weight: bold;" id="stability_power">-</div>
+                    </div>
+                </div>
+
+                <!-- 信号质量卡片 -->
+                <div class="kfk_card" style="padding: .55rem; background: linear-gradient(135deg, rgba(33,150,243,0.15) 0%, rgba(33,150,243,0.05) 100%); border-radius: 10px; border: 1px solid rgba(33,150,243,0.3); position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                    <div style="position: absolute; top: 8px; right: 8px; width: 6px; height: 6px; border-radius: 50%; background: #2196F3; box-shadow: 0 0 6px #2196F3;"></div>
+                    <div style="text-align: center; margin-bottom: 10px;">
+                        <div style="font-size: .75rem; color: #2196F3; margin-bottom: 4px; font-weight: 600;">信号质量</div>
+                        <div id="signal_sinr" style="font-size: 20px; font-weight: bold; color: #2196F3; margin-bottom: 4px;">-</div>
+                        <div style="font-size: .8rem; color: #2196F3; opacity: 0.8;">SINR</div>
+                    </div>
+                    <div style="display: flex; justify-content: center; margin-bottom: 8px;">
+                        <div id="status_dots_sinr" style="display: flex; gap: 3px; align-items: center; height: 10px; overflow: hidden;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: .8rem; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 4px;">
+                        <div style="color: var(--dark-text-color); font-weight: bold;" id="sinr_quality">检测中</div>
+                        <div style="width: 1px; background: rgba(255,255,255,0.2);"></div>
+                        <div style="color: var(--dark-text-color); font-weight: bold;" id="stability_sinr">-</div>
+                    </div>
+                </div>
+
+                <!-- 连接质量卡片 -->
+                <div class="kfk_card" style="padding: .55rem; background: linear-gradient(135deg, rgba(255,152,0,0.15) 0%, rgba(255,152,0,0.05) 100%); border-radius: 10px; border: 1px solid rgba(255,152,0,0.3); position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                    <div style="position: absolute; top: 8px; right: 8px; width: 6px; height: 6px; border-radius: 50%; background: #FF9800; box-shadow: 0 0 6px #FF9800;"></div>
+                    <div style="text-align: center; margin-bottom: 10px;">
+                        <div style="font-size: .75rem; color: #FF9800; margin-bottom: 4px; font-weight: 600;">连接质量</div>
+                        <div id="signal_rsrq" style="font-size: 20px; font-weight: bold; color: #FF9800; margin-bottom: 4px;">- dB</div>
+                        <div style="font-size: .8rem; color: #FF9800; opacity: 0.8;">RSRQ</div>
+                    </div>
+                    <div style="display: flex; justify-content: center; margin-bottom: 8px;">
+                        <div id="status_dots_rsrq" style="display: flex; gap: 3px; align-items: center; height: 10px; overflow: hidden;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: .8rem; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 4px;">
+                        <div style="color: var(--dark-text-color); font-weight: bold;" id="rsrq_quality">检测中</div>
+                        <div style="width: 1px; background: rgba(255,255,255,0.2);"></div>
+                        <div style="color: var(--dark-text-color); font-weight: bold;" id="stability_rsrq">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 性能概览 -->
+            <div style="margin-bottom: 8px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-size: .8rem; color: var(--dark-text-color); font-weight: 600;">性能概览</div>
+                    <div style="font-size: .7rem; color: var(--dark-text-color);">实时统计</div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                    <!-- 信号强度统计 -->
+                    <div style="text-align: center; padding: 8px; background: rgba(76,175,80,0.1); border-radius: 6px; border: 1px solid rgba(76,175,80,0.2);">
+                        <div style="font-size: .77rem; color: #52ef58; margin-bottom: 6px; font-weight: 600;">信号强度</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                            <div>
+                                <div style="font-size: .7rem; color: var(--dark-text-color); margin-bottom: 2px;">平均值</div>
+                                <div style="font-size: .75rem; font-weight: bold; color: #52ef58;" id="avg_power">- dBm</div>
+                            </div>
+                            <div>
+                                <div style="font-size: .7rem; color: var(--dark-text-color); margin-bottom: 2px;">最佳值</div>
+                                <div style="font-size: .75rem; font-weight: bold; color: #52ef58;" id="best_power">- dBm</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 信号质量统计 -->
+                    <div style="text-align: center; padding: 8px; background: rgba(33,150,243,0.1); border-radius: 6px; border: 1px solid rgba(33,150,243,0.2);">
+                        <div style="font-size: .77rem; color: #2196F3; margin-bottom: 6px; font-weight: 600;">信号质量</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                            <div>
+                                <div style="font-size: .7rem; color: var(--dark-text-color); margin-bottom: 2px;">平均值</div>
+                                <div style="font-size: .75rem; font-weight: bold; color: #2196F3;" id="avg_sinr">-</div>
+                            </div>
+                            <div>
+                                <div style="font-size: .7rem; color: var(--dark-text-color); margin-bottom: 2px;">最佳值</div>
+                                <div style="font-size: .75rem; font-weight: bold; color: #2196F3;" id="best_sinr">-</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 连接质量统计 -->
+                    <div style="text-align: center; padding: 8px; background: rgba(255,152,0,0.1); border-radius: 6px; border: 1px solid rgba(255,152,0,0.2);">
+                        <div style="font-size: .77rem; color: #FF9800; margin-bottom: 6px; font-weight: 600;">连接质量</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                            <div>
+                                <div style="font-size: .7rem; color: var(--dark-text-color); margin-bottom: 2px;">平均值</div>
+                                <div style="font-size: .75rem; font-weight: bold; color: #FF9800;" id="avg_rsrq">- dB</div>
+                            </div>
+                            <div>
+                                <div style="font-size: .7rem; color: var(--dark-text-color); margin-bottom: 2px;">最佳值</div>
+                                <div style="font-size: .75rem; font-weight: bold; color: #FF9800;" id="best_rsrq">- dB</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 总评分卡片 -->
+            <div style="margin-bottom: 8px; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <div style="font-size: .8rem; color: var(--dark-text-color); font-weight: 600;">综合评分</div>
+                        <div style="font-size: .7rem; color: var(--dark-text-color);">信号质量评估</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <div id="overall_score" style="font-size: 16px; font-weight: bold; color: var(--dark-text-color);">-</div>
+                        <div style="font-size: .8rem; color: var(--dark-text-color);">/100</div>
+                    </div>
+                </div>
+                <div style="margin-top: 4px;">
+                    <div style="font-size: .77rem; color: var(--dark-text-color);" id="score_description">正在评估信号质量...</div>
+                </div>
+            </div>
+
+            <!-- 信号趋势图 -->
+            <div style="margin-bottom: 8px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-size: .8rem; color: var(--dark-text-color); font-weight: 600;">信号趋势图</div>
+                    <div style="display: flex; gap: 4px;">
+                        <button id="toggle_chart_btn" class="btn" style="padding: 2px 6px; font-size: .77rem;">切换视图</button>
+                        <button id="clear_chart_btn" class="btn" style="padding: 2px 6px; font-size: .77rem;">清空数据</button>
+                        <button id="toggle_chart_display_btn" class="btn" style="padding: 2px 6px; font-size: .77rem;">📊 显示图表</button>
+                    </div>
+                </div>
+                
+                <!-- 图表内容区域，可以折叠 -->
+                <div class="collapse" id="collapse_chart_content" data-name="close" style="height: 0px; overflow: hidden;">
+                    <div style="height: 80px; position: relative; margin-bottom: 6px;">
+                        <canvas id="signal_chart" style="width: 100%; height: 100%; border-radius: 4px;"></canvas>
+                        <div id="chart_placeholder" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); border-radius: 4px;">
+                            <div style="text-align: center; color: #666; font-size: .8rem;">
+                                <div>📊</div>
+                                <div>正在收集数据...</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <div style="display: flex; align-items: center; gap: 2px;">
+                                <div style="width: 8px; height: 2px; background: #52ef58;"></div>
+                                <span style="font-size: .7rem; color: var(--dark-text-color);">RSRP</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 2px;">
+                                <div style="width: 8px; height: 2px; background: #2196F3;"></div>
+                                <span style="font-size: .7rem; color: var(--dark-text-color);">SINR</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 2px;">
+                                <div style="width: 8px; height: 2px; background: #FF9800;"></div>
+                                <span style="font-size: .7rem; color: var(--dark-text-color);">RSRQ</span>
+                            </div>
+                        </div>
+                        <div style="font-size: .7rem; color: var(--dark-text-color);" id="chart_stats">数据点: 0</div>
+                    </div>
+                    <!-- 当前数值显示 -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 6px; background: rgba(0,0,0,0.2); border-radius: 4px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: .7rem; color: #52ef58;">当前RSRP</div>
+                            <div style="font-size: .8rem; font-weight: bold; color: #52ef58;" id="current_power">- dBm</div>
+                            <div style="font-size: .7rem; color: var(--dark-text-color);" id="trend_power">-</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: .7rem; color: #2196F3;">当前SINR</div>
+                            <div style="font-size: .8rem; font-weight: bold; color: #2196F3;" id="current_sinr">-</div>
+                            <div style="font-size: .7rem; color: var(--dark-text-color);" id="trend_sinr">-</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: .7rem; color: #FF9800;">当前RSRQ</div>
+                            <div style="font-size: .8rem; font-weight: bold; color: #FF9800;" id="current_rsrq">- dB</div>
+                            <div style="font-size: .7rem; color: var(--dark-text-color);" id="trend_rsrq">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 图例说明 -->
+            <div style="padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="font-size: .77rem; color: var(--dark-text-color);">信号质量: <span style="color:#52ef58;">优</span> → <span style="color:#8BC34A;">良</span> → <span style="color:#FFC107;">中</span> → <span style="color:#FF9800;">差</span> → <span style="color:#f44336;">断</span></span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: .7rem; color: var(--dark-text-color);">
+                    <span>RSRP &lt;-85优秀, &lt;-95良好</span>
+                    <span>SINR &gt;20优秀, &gt;10良好</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+`);
+
+        /* ===== 样式 - 使用更具体的选择器避免影响其他模块 ===== */
+        const style = document.createElement('style');
+        style.textContent = `
+#SIGNAL_MONITOR { 
+    font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial; 
+    border-radius: 6px;
+    padding: 4px;
+    padding-left:0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.sSIGNAL_MONITOR{
+   padding-left:0 !important;
+}
+
+#SIGNAL_MONITOR .collapse_box{ 
+    padding: 6px; 
+    backdrop-filter: blur(20px);
+    background: var(--dark-card-bg);
+    border-radius: 10px;
+}
+
+#SIGNAL_MONITOR .btn{ 
+    background: transparent; 
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 3px 6px; 
+    border-radius: 3px; 
+    cursor: pointer; 
+    color: var(--dark-text-color); 
+    font-weight: 600; 
+    font-size: .77rem; 
+    transition: all 0.2s ease;
+}
+#SIGNAL_MONITOR .btn:hover{ 
+    background: rgba(255,255,255,0.1);
+    transform: translateY(-1px);
+}
+
+#SIGNAL_MONITOR .btn:active { 
+    transform: scale(0.98); 
+}
+
+#SIGNAL_MONITOR .status-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: #666;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 3px rgba(0,0,0,0.3);
+}
+
+#SIGNAL_MONITOR select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background: #333 url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5'%3e%3cpath fill='%23ffffff' d='M2 0L0 2h4zm0 5L0 3h4z'/%3e%3c/svg%3e") no-repeat right 8px center/8px 10px;
+    padding-right: 24px;
+}
+
+#SIGNAL_MONITOR select option {
+    background: #333;
+    color: var(--dark-text-color);
+}
+`;
+        document.head.appendChild(style);
+
+        /* ===== 信号监控逻辑 ===== */
+        const CONFIG = {
+            MAX_DOTS: 12,
+            MONITOR_INTERVAL: 3000,  // 默认3秒
+            CHART_MAX_POINTS: 30, // 图表最大数据点数
+            COLORS: {
+                EXCELLENT: '#52ef58',  // 优 - 绿色
+                GOOD: '#8BC34A',       // 良 - 浅绿色
+                FAIR: '#FFC107',       // 中 - 黄色
+                POOR: '#FF9800',       // 差 - 橙色
+                BAD: '#f44336',        // 断 - 红色
+                PENDING: '#666'
+            }
+        };
+
+        const state = {
+            isMonitoring: true,
+            monitorInterval: null,
+            history: {
+                power: [],
+                sinr: [],
+                rsrq: []
+            },
+            chartData: {
+                power: [],
+                sinr: [],
+                rsrq: [],
+                timestamps: []
+            },
+            bestValues: {
+                power: -999,
+                sinr: -999,
+                rsrq: -999
+            },
+            sampleCount: 0,
+            lastDataTime: null,
+            dataSource: 'parsing', // 'parsing' 或 'simulated'
+            chartView: 'all', // 'all', 'power', 'sinr', 'rsrq'
+            currentValues: {
+                power: null,
+                sinr: null,
+                rsrq: null
+            },
+            previousValues: {
+                power: null,
+                sinr: null,
+                rsrq: null
+            },
+            trends: {
+                power: 'stable',
+                sinr: 'stable',
+                rsrq: 'stable'
+            },
+            chartVisible: false, // 默认不显示图表
+        };
+
+        /* ===== 网络加速功能 ===== */
+        const checkAdvanceFunc = async () => {
+            try {
+                const res = await runShellWithRoot('whoami');
+                if (res.content) {
+                    if (res.content.includes('root')) {
+                        return true;
+                    }
+                }
+                return false;
+            } catch (error) {
+                console.error('检查权限失败:', error);
+                return false;
+            }
+        };
+
+        // 改进的信号质量评估
+        function getPowerQuality(power) {
+            const powerValue = parseInt(power);
+
+            if (powerValue >= -83) {
+                return { quality: "优", level: "excellent", color: CONFIG.COLORS.EXCELLENT };
+            } else if (powerValue >= -93) {
+                return { quality: "良", level: "good", color: CONFIG.COLORS.GOOD };
+            } else if (powerValue >= -103) {
+                return { quality: "中", level: "fair", color: CONFIG.COLORS.FAIR };
+            } else if (powerValue >= -113) {
+                return { quality: "差", level: "poor", color: CONFIG.COLORS.POOR };
+            } else {
+                return { quality: "断", level: "bad", color: CONFIG.COLORS.BAD };
+            }
+        }
+
+        function getSinrQuality(sinr) {
+            const sinrValue = parseInt(sinr);
+
+            if (sinrValue > 22) {
+                return { quality: "优", level: "excellent", color: CONFIG.COLORS.EXCELLENT };
+            } else if (sinrValue > 16) {
+                return { quality: "良", level: "good", color: CONFIG.COLORS.GOOD };
+            } else if (sinrValue > 11) {
+                return { quality: "中", level: "fair", color: CONFIG.COLORS.FAIR };
+            } else if (sinrValue > 6) {
+                return { quality: "差", level: "poor", color: CONFIG.COLORS.POOR };
+            } else {
+                return { quality: "断", level: "bad", color: CONFIG.COLORS.BAD };
+            }
+        }
+
+        function getRsrqQuality(rsrq) {
+            const rsrqValue = parseInt(rsrq);
+
+            if (rsrqValue >= -7) {
+                return { quality: "优", level: "excellent", color: CONFIG.COLORS.EXCELLENT };
+            } else if (rsrqValue >= -9) {
+                return { quality: "良", level: "good", color: CONFIG.COLORS.GOOD };
+            } else if (rsrqValue >= -11) {
+                return { quality: "中", level: "fair", color: CONFIG.COLORS.FAIR };
+            } else if (rsrqValue >= -14) {
+                return { quality: "差", level: "poor", color: CONFIG.COLORS.POOR };
+            } else {
+                return { quality: "断", level: "bad", color: CONFIG.COLORS.BAD };
+            }
+        }
+
+        // 改进的稳定性评级
+        function getStabilityRating(history, type) {
+            if (!history || history.length < 8) return "检测中";
+
+            const changes = [];
+            for (let i = 1; i < history.length; i++) {
+                const prev = parseInt(history[i - 1]);
+                const curr = parseInt(history[i]);
+                if (Math.abs(curr - prev) < 20) {
+                    changes.push(Math.abs(curr - prev));
+                }
+            }
+
+            if (changes.length === 0) return "检测中";
+
+            const avgChange = changes.reduce((a, b) => a + b) / changes.length;
+
+            const thresholds = {
+                power: { excellent: 1, good: 3, fair: 6 },
+                sinr: { excellent: 0.5, good: 1.5, fair: 3 },
+                rsrq: { excellent: 0.3, good: 0.8, fair: 1.5 }
+            };
+
+            const threshold = thresholds[type] || thresholds.power;
+
+            if (avgChange < threshold.excellent) return "极稳";
+            if (avgChange < threshold.good) return "稳定";
+            if (avgChange < threshold.fair) return "一般";
+            return "波动";
+        }
+
+        // 创建状态点元素
+        function createStatusDot(backgroundColor = CONFIG.COLORS.PENDING, title = '等待') {
+            const dot = document.createElement('div');
+            dot.className = 'status-dot';
+            dot.style.backgroundColor = backgroundColor;
+            dot.title = title;
+            return dot;
+        }
+
+        // 初始化状态点图
+        function initializeStatusDots() {
+            const containers = [
+                'status_dots_power',
+                'status_dots_sinr',
+                'status_dots_rsrq'
+            ];
+
+            containers.forEach(containerId => {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+
+                const fragment = document.createDocumentFragment();
+                for (let i = 0; i < CONFIG.MAX_DOTS; i++) {
+                    fragment.appendChild(createStatusDot());
+                }
+
+                container.innerHTML = '';
+                container.appendChild(fragment);
+            });
+        }
+
+        // 状态点更新逻辑 - 根据信号强度点亮不同数量的点
+        function updateStatusDots(containerId, value, type) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const dots = container.children;
+            let activeDots = 0;
+            let color = CONFIG.COLORS.PENDING;
+            let title = '等待数据';
+
+            if (type === 'power') {
+                const powerValue = parseInt(value);
+
+                if (powerValue >= -83) {
+                    activeDots = 12;
+                    color = CONFIG.COLORS.EXCELLENT;
+                    title = "信号极佳";
+                } else if (powerValue >= -88) {
+                    activeDots = 10;
+                    color = CONFIG.COLORS.EXCELLENT;
+                    title = "信号很好";
+                } else if (powerValue >= -93) {
+                    activeDots = 8;
+                    color = CONFIG.COLORS.GOOD;
+                    title = "信号良好";
+                } else if (powerValue >= -98) {
+                    activeDots = 6;
+                    color = CONFIG.COLORS.FAIR;
+                    title = "信号中等";
+                } else if (powerValue >= -103) {
+                    activeDots = 5;
+                    color = CONFIG.COLORS.FAIR;
+                    title = "信号一般";
+                } else if (powerValue >= -108) {
+                    activeDots = 4;
+                    color = CONFIG.COLORS.POOR;
+                    title = "信号较差";
+                } else if (powerValue >= -113) {
+                    activeDots = 3;
+                    color = CONFIG.COLORS.POOR;
+                    title = "信号差";
+                } else if (powerValue >= -118) {
+                    activeDots = 2;
+                    color = CONFIG.COLORS.BAD;
+                    title = "信号很差";
+                } else {
+                    activeDots = 1;
+                    color = CONFIG.COLORS.BAD;
+                    title = "信号极差或断开";
+                }
+            } else if (type === 'sinr') {
+                const sinrValue = parseInt(value);
+
+                if (sinrValue > 25) {
+                    activeDots = 12;
+                    color = CONFIG.COLORS.EXCELLENT;
+                    title = "质量极佳";
+                } else if (sinrValue > 22) {
+                    activeDots = 10;
+                    color = CONFIG.COLORS.EXCELLENT;
+                    title = "质量很好";
+                } else if (sinrValue > 18) {
+                    activeDots = 8;
+                    color = CONFIG.COLORS.GOOD;
+                    title = "质量良好";
+                } else if (sinrValue > 14) {
+                    activeDots = 6;
+                    color = CONFIG.COLORS.FAIR;
+                    title = "质量中等";
+                } else if (sinrValue > 11) {
+                    activeDots = 5;
+                    color = CONFIG.COLORS.FAIR;
+                    title = "质量一般";
+                } else if (sinrValue > 8) {
+                    activeDots = 4;
+                    color = CONFIG.COLORS.POOR;
+                    title = "质量较差";
+                } else if (sinrValue > 6) {
+                    activeDots = 3;
+                    color = CONFIG.COLORS.POOR;
+                    title = "质量差";
+                } else if (sinrValue > 3) {
+                    activeDots = 2;
+                    color = CONFIG.COLORS.BAD;
+                    title = "质量很差";
+                } else {
+                    activeDots = 1;
+                    color = CONFIG.COLORS.BAD;
+                    title = "质量极差";
+                }
+            } else if (type === 'rsrq') {
+                const rsrqValue = parseInt(value);
+
+                if (rsrqValue >= -6) {
+                    activeDots = 12;
+                    color = CONFIG.COLORS.EXCELLENT;
+                    title = "连接极佳";
+                } else if (rsrqValue >= -7) {
+                    activeDots = 10;
+                    color = CONFIG.COLORS.EXCELLENT;
+                    title = "连接很好";
+                } else if (rsrqValue >= -8) {
+                    activeDots = 8;
+                    color = CONFIG.COLORS.GOOD;
+                    title = "连接良好";
+                } else if (rsrqValue >= -9) {
+                    activeDots = 6;
+                    color = CONFIG.COLORS.FAIR;
+                    title = "连接中等";
+                } else if (rsrqValue >= -10) {
+                    activeDots = 5;
+                    color = CONFIG.COLORS.FAIR;
+                    title = "连接一般";
+                } else if (rsrqValue >= -11) {
+                    activeDots = 4;
+                    color = CONFIG.COLORS.POOR;
+                    title = "连接较差";
+                } else if (rsrqValue >= -12) {
+                    activeDots = 3;
+                    color = CONFIG.COLORS.POOR;
+                    title = "连接差";
+                } else if (rsrqValue >= -14) {
+                    activeDots = 2;
+                    color = CONFIG.COLORS.BAD;
+                    title = "连接很差";
+                } else {
+                    activeDots = 1;
+                    color = CONFIG.COLORS.BAD;
+                    title = "连接极差";
+                }
+            }
+
+            for (let i = 0; i < dots.length; i++) {
+                if (i < activeDots) {
+                    dots[i].style.backgroundColor = color;
+                    dots[i].title = title;
+                    dots[i].style.boxShadow = `0 0 4px ${color}`;
+                } else {
+                    dots[i].style.backgroundColor = CONFIG.COLORS.PENDING;
+                    dots[i].title = '未激活';
+                    dots[i].style.boxShadow = '0 0 3px rgba(0,0,0,0.3)';
+                }
+            }
+        }
+
+        // 改进的平均值计算
+        function calculateAverage(history, currentValue) {
+            const newValue = parseInt(currentValue);
+
+            if (history.length > 0) {
+                const currentAvg = history.reduce((a, b) => a + b) / history.length;
+                if (Math.abs(newValue - currentAvg) > 15) {
+                    history.push((currentAvg * 0.7 + newValue * 0.3));
+                } else {
+                    history.push(newValue);
+                }
+            } else {
+                history.push(newValue);
+            }
+
+            if (history.length > 15) {
+                history.shift();
+            }
+
+            if (history.length > 0) {
+                let weightedSum = 0;
+                let weightSum = 0;
+
+                history.forEach((value, index) => {
+                    const weight = (index + 1) / history.length;
+                    weightedSum += value * weight;
+                    weightSum += weight;
+                });
+
+                return weightedSum / weightSum;
+            }
+            return newValue;
+        }
+
+        // 更新最佳值记录
+        function updateBestValues(data) {
+            if (data.receivePower) {
+                const powerValue = parseInt(data.receivePower);
+                if (powerValue > state.bestValues.power) {
+                    state.bestValues.power = powerValue;
+                }
+            }
+            if (data.sinr) {
+                const sinrValue = parseInt(data.sinr);
+                if (sinrValue > state.bestValues.sinr) {
+                    state.bestValues.sinr = sinrValue;
+                }
+            }
+            if (data.rsrq) {
+                const rsrqValue = parseInt(data.rsrq);
+                if (rsrqValue > state.bestValues.rsrq) {
+                    state.bestValues.rsrq = rsrqValue;
+                }
+            }
+
+            // 更新显示
+            document.getElementById('best_power').textContent =
+                state.bestValues.power !== -999 ? `${state.bestValues.power} dBm` : '- dBm';
+            document.getElementById('best_sinr').textContent =
+                state.bestValues.sinr !== -999 ? state.bestValues.sinr : '-';
+            document.getElementById('best_rsrq').textContent =
+                state.bestValues.rsrq !== -999 ? `${state.bestValues.rsrq} dB` : '- dB';
+        }
+
+        // 计算综合评分
+        function calculateOverallScore(data) {
+            if (!data.receivePower || !data.sinr || !data.rsrq) {
+                return { score: 0, description: "数据不足" };
+            }
+
+            const power = parseInt(data.receivePower);
+            const sinr = parseInt(data.sinr);
+            const rsrq = parseInt(data.rsrq);
+
+            // 计算综合评分 (0-100分)
+            let score = 0;
+
+            // RSRP评分 (0-40分)
+            if (power >= -83) score += 40;
+            else if (power >= -88) score += 35;
+            else if (power >= -93) score += 30;
+            else if (power >= -98) score += 25;
+            else if (power >= -103) score += 20;
+            else if (power >= -108) score += 15;
+            else if (power >= -113) score += 10;
+            else score += 5;
+
+            // SINR评分 (0-35分)
+            if (sinr > 25) score += 35;
+            else if (sinr > 22) score += 30;
+            else if (sinr > 18) score += 25;
+            else if (sinr > 14) score += 20;
+            else if (sinr > 11) score += 15;
+            else if (sinr > 8) score += 10;
+            else if (sinr > 6) score += 8;
+            else score += 5;
+
+            // RSRQ评分 (0-25分)
+            if (rsrq >= -6) score += 25;
+            else if (rsrq >= -7) score += 20;
+            else if (rsrq >= -8) score += 15;
+            else if (rsrq >= -9) score += 12;
+            else if (rsrq >= -10) score += 10;
+            else if (rsrq >= -11) score += 8;
+            else if (rsrq >= -12) score += 6;
+            else score += 4;
+
+            // 确定评分描述
+            let description;
+            if (score >= 90) {
+                description = "信号极佳，网络体验优秀";
+            } else if (score >= 80) {
+                description = "信号良好，网络体验流畅";
+            } else if (score >= 70) {
+                description = "信号一般，网络体验尚可";
+            } else if (score >= 60) {
+                description = "信号较差，网络体验一般";
+            } else if (score >= 50) {
+                description = "信号差，网络体验不佳";
+            } else {
+                description = "信号极差，建议调整位置";
+            }
+
+            return { score, description };
+        }
+
+        // 计算趋势
+        function calculateTrends(data) {
+            if (!data.receivePower || !data.sinr || !data.rsrq) return;
+
+            const currentPower = parseInt(data.receivePower);
+            const currentSinr = parseInt(data.sinr);
+            const currentRsrq = parseInt(data.rsrq);
+
+            // 计算RSRP趋势
+            if (state.previousValues.power !== null) {
+                const diff = currentPower - state.previousValues.power;
+                if (diff > 2) state.trends.power = 'improving';
+                else if (diff < -2) state.trends.power = 'deteriorating';
+                else state.trends.power = 'stable';
+            }
+
+            // 计算SINR趋势
+            if (state.previousValues.sinr !== null) {
+                const diff = currentSinr - state.previousValues.sinr;
+                if (diff > 1) state.trends.sinr = 'improving';
+                else if (diff < -1) state.trends.sinr = 'deteriorating';
+                else state.trends.sinr = 'stable';
+            }
+
+            // 计算RSRQ趋势
+            if (state.previousValues.rsrq !== null) {
+                const diff = currentRsrq - state.previousValues.rsrq;
+                if (diff > 0.5) state.trends.rsrq = 'improving';
+                else if (diff < -0.5) state.trends.rsrq = 'deteriorating';
+                else state.trends.rsrq = 'stable';
+            }
+
+            // 保存当前值为下一次比较做准备
+            state.previousValues.power = currentPower;
+            state.previousValues.sinr = currentSinr;
+            state.previousValues.rsrq = currentRsrq;
+
+            // 更新显示
+            updateTrendDisplay();
+        }
+
+        // 更新趋势显示
+        function updateTrendDisplay() {
+            const powerElement = document.getElementById('trend_power');
+            const sinrElement = document.getElementById('trend_sinr');
+            const rsrqElement = document.getElementById('trend_rsrq');
+
+            if (powerElement) {
+                powerElement.textContent = getTrendText(state.trends.power);
+                powerElement.style.color = getTrendColor(state.trends.power);
+            }
+
+            if (sinrElement) {
+                sinrElement.textContent = getTrendText(state.trends.sinr);
+                sinrElement.style.color = getTrendColor(state.trends.sinr);
+            }
+
+            if (rsrqElement) {
+                rsrqElement.textContent = getTrendText(state.trends.rsrq);
+                rsrqElement.style.color = getTrendColor(state.trends.rsrq);
+            }
+        }
+
+        // 获取趋势文本
+        function getTrendText(trend) {
+            switch (trend) {
+                case 'improving': return '↑ 改善中';
+                case 'deteriorating': return '↓ 恶化中';
+                case 'stable': return '→ 稳定';
+                default: return '-';
+            }
+        }
+
+        // 获取趋势颜色
+        function getTrendColor(trend) {
+            switch (trend) {
+                case 'improving': return '#52ef58';
+                case 'deteriorating': return '#f44336';
+                case 'stable': return '#FFC107';
+                default: return 'var(--dark-text-color)';
+            }
+        }
+
+        // 更新当前数值显示
+        function updateCurrentValues(data) {
+            if (data.receivePower) {
+                state.currentValues.power = data.receivePower;
+                document.getElementById('current_power').textContent = `${data.receivePower} dBm`;
+            }
+            if (data.sinr) {
+                state.currentValues.sinr = data.sinr;
+                document.getElementById('current_sinr').textContent = data.sinr;
+            }
+            if (data.rsrq) {
+                state.currentValues.rsrq = data.rsrq;
+                document.getElementById('current_rsrq').textContent = `${data.rsrq} dB`;
+            }
+        }
+
+        // 更新图表数据
+        function updateChartData(data) {
+            const now = new Date();
+            const timestamp = now.toLocaleTimeString();
+
+            // 添加新数据
+            if (data.receivePower) {
+                state.chartData.power.push(parseInt(data.receivePower));
+            }
+            if (data.sinr) {
+                state.chartData.sinr.push(parseInt(data.sinr));
+            }
+            if (data.rsrq) {
+                state.chartData.rsrq.push(parseInt(data.rsrq));
+            }
+            state.chartData.timestamps.push(timestamp);
+
+            // 限制数据点数量
+            if (state.chartData.power.length > CONFIG.CHART_MAX_POINTS) {
+                state.chartData.power.shift();
+                state.chartData.sinr.shift();
+                state.chartData.rsrq.shift();
+                state.chartData.timestamps.shift();
+            }
+
+            // 更新图表
+            if (state.chartVisible) {
+                drawSignalChart();
+            }
+
+            // 更新统计信息
+            document.getElementById('chart_stats').textContent = `数据点: ${state.chartData.power.length}`;
+
+            // 如果有数据，隐藏占位符
+            if (state.chartData.power.length > 0 && state.chartVisible) {
+                document.getElementById('chart_placeholder').style.display = 'none';
+            }
+        }
+
+        // 绘制信号图表
+        function drawSignalChart() {
+            const canvas = document.getElementById('signal_chart');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+
+            // === 💡 同步Canvas分辨率与显示尺寸 ===
+            const dpr = window.devicePixelRatio || 1;
+            const displayWidth = canvas.clientWidth;
+            const displayHeight = canvas.clientHeight;
+            if (canvas.width !== displayWidth * dpr || canvas.height !== displayHeight * dpr) {
+                canvas.width = displayWidth * dpr;
+                canvas.height = displayHeight * dpr;
+            }
+
+            // 缩放绘制坐标到逻辑像素
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            const width = displayWidth;
+            const height = displayHeight;
+
+            ctx.clearRect(0, 0, width, height);
+
+            if (!state.chartData || state.chartData.power.length === 0) return;
+
+            const powerData = state.chartData.power;
+            const sinrData = state.chartData.sinr;
+            const rsrqData = state.chartData.rsrq;
+
+            let datasets = [];
+            if (state.chartView === 'all' || state.chartView === 'power') {
+                datasets.push({ data: powerData, color: '#52ef58', label: 'RSRP' });
+            }
+            if (state.chartView === 'all' || state.chartView === 'sinr') {
+                datasets.push({ data: sinrData, color: '#2196F3', label: 'SINR' });
+            }
+            if (state.chartView === 'all' || state.chartView === 'rsrq') {
+                datasets.push({ data: rsrqData, color: '#FF9800', label: 'RSRQ' });
+            }
+
+            // 计算数据范围
+            let minValue = Infinity;
+            let maxValue = -Infinity;
+            datasets.forEach(ds => {
+                ds.data.forEach(v => {
+                    if (v < minValue) minValue = v;
+                    if (v > maxValue) maxValue = v;
+                });
+            });
+
+            const range = maxValue - minValue;
+            minValue = minValue - range * 0.1;
+            maxValue = maxValue + range * 0.1;
+            if (minValue === maxValue) {
+                minValue -= 1;
+                maxValue += 1;
+            }
+
+            // === 绘制网格线 ===
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i <= 4; i++) {
+                const y = height - (i * height / 4);
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
+
+            // 按显示层级绘制
+            const orderedDatasets = [];
+            if (state.chartView === 'all' || state.chartView === 'rsrq')
+                orderedDatasets.push({ data: rsrqData, color: '#FF9800', label: 'RSRQ' });
+            if (state.chartView === 'all' || state.chartView === 'sinr')
+                orderedDatasets.push({ data: sinrData, color: '#2196F3', label: 'SINR' });
+            if (state.chartView === 'all' || state.chartView === 'power')
+                orderedDatasets.push({ data: powerData, color: '#52ef58', label: 'RSRP' });
+
+            orderedDatasets.forEach(ds => {
+                const data = ds.data;
+                if (data.length < 2) return;
+
+                ctx.strokeStyle = ds.color;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+
+                data.forEach((v, i) => {
+                    const x = (i / (data.length - 1)) * width;
+                    const y = height - ((v - minValue) / (maxValue - minValue)) * height;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+
+                ctx.stroke();
+
+                // 绘制数据点
+                ctx.fillStyle = ds.color;
+                data.forEach((v, i) => {
+                    const x = (i / (data.length - 1)) * width;
+                    const y = height - ((v - minValue) / (maxValue - minValue)) * height;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 2, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    if (i === data.length - 1) {
+                        ctx.fillStyle = 'var(--dark-text-color)';
+                        ctx.font = '8px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(v, x - 10, y - 8);
+                    }
+                });
+            });
+        }
+
+        // 切换图表视图
+        function toggleChartView() {
+            const views = ['all', 'power', 'sinr', 'rsrq'];
+            const currentIndex = views.indexOf(state.chartView);
+            state.chartView = views[(currentIndex + 1) % views.length];
+
+            // 更新按钮文本
+            const button = document.getElementById('toggle_chart_btn');
+            const viewNames = {
+                'all': '全部',
+                'power': 'RSRP',
+                'sinr': 'SINR',
+                'rsrq': 'RSRQ'
+            };
+            button.textContent = `视图: ${viewNames[state.chartView]}`;
+
+            // 重绘图表
+            if (state.chartVisible) {
+                drawSignalChart();
+            }
+        }
+
+        // 切换图表显示
+        function toggleChartDisplay() {
+            const chartContentElement = document.getElementById('collapse_chart_content');
+            const button = document.getElementById('toggle_chart_display_btn');
+
+            if (chartContentElement.getAttribute('data-name') === 'close') {
+                // 显示图表
+                chartContentElement.style.height = 'auto';
+                chartContentElement.setAttribute('data-name', 'open');
+                button.textContent = '📊 隐藏图表';
+                state.chartVisible = true;
+
+                // 如果有数据，重绘图表
+                if (state.chartData.power.length > 0) {
+                    document.getElementById('chart_placeholder').style.display = 'none';
+                    drawSignalChart();
+                }
+            } else {
+                // 隐藏图表
+                chartContentElement.style.height = '0px';
+                chartContentElement.style.overflow = 'hidden';
+                chartContentElement.setAttribute('data-name', 'close');
+                button.textContent = '📊 显示图表';
+                state.chartVisible = false;
+            }
+        }
+
+        // 清空图表数据
+        function clearChartData() {
+            state.chartData = {
+                power: [],
+                sinr: [],
+                rsrq: [],
+                timestamps: []
+            };
+
+            // 更新显示
+            document.getElementById('chart_stats').textContent = '数据点: 0';
+            document.getElementById('chart_placeholder').style.display = 'flex';
+
+            // 重绘图表
+            if (state.chartVisible) {
+                drawSignalChart();
+            }
+        }
+
+        // 改进的数据解析
+        async function parseSignalFromPage() {
+            return new Promise((resolve) => {
+                try {
+                    setTimeout(() => {
+                        try {
+                            const pageText = document.body.innerText;
+                            let signalData = null;
+
+                            const patterns = [
+                                {
+                                    power: pageText.match(/5G接收功率[：:\s]*(-?\d+)/),
+                                    band: pageText.match(/5G注册频段[：:\s]*([^\s]+)/),
+                                    sinr: pageText.match(/5G SINR[：:\s]*(-?\d+)/),
+                                    rsrq: pageText.match(/5G RSRQ[：:\s]*(-?\d+)/),
+                                    pci: pageText.match(/5G PCI[：:\s]*(\d+)/)
+                                },
+                                {
+                                    power: pageText.match(/RSRP[：:\s]*(-?\d+)/),
+                                    band: pageText.match(/频段[：:\s]*([^\s]+)/),
+                                    sinr: pageText.match(/SINR[：:\s]*(-?\d+)/),
+                                    rsrq: pageText.match(/RSRQ[：:\s]*(-?\d+)/),
+                                    pci: pageText.match(/PCI[：:\s]*(\d+)/)
+                                },
+                                {
+                                    power: pageText.match(/RSRP[:\s]*(-?\d+)/),
+                                    band: pageText.match(/Band[:\s]*([^\s]+)/),
+                                    sinr: pageText.match(/SINR[:\s]*(-?\d+)/),
+                                    rsrq: pageText.match(/RSRQ[:\s]*(-?\d+)/),
+                                    pci: pageText.match(/PCI[:\s]*(\d+)/)
+                                }
+                            ];
+
+                            for (const pattern of patterns) {
+                                const validCount = Object.values(pattern).filter(match => match !== null).length;
+                                if (validCount >= 3) {
+                                    signalData = {
+                                        receivePower: pattern.power ? pattern.power[1] : null,
+                                        band: pattern.band ? pattern.band[1] : null,
+                                        sinr: pattern.sinr ? pattern.sinr[1] : null,
+                                        rsrq: pattern.rsrq ? pattern.rsrq[1] : null,
+                                        pci: pattern.pci ? pattern.pci[1] : null
+                                    };
+                                    break;
+                                }
+                            }
+
+                            if (signalData) {
+                                if (signalData.receivePower && (signalData.receivePower > -50 || signalData.receivePower < -150)) {
+                                    signalData.receivePower = null;
+                                }
+                                if (signalData.sinr && (signalData.sinr > 50 || signalData.sinr < -10)) {
+                                    signalData.sinr = null;
+                                }
+                                if (signalData.rsrq && (signalData.rsrq > 0 || signalData.rsrq < -30)) {
+                                    signalData.rsrq = null;
+                                }
+                            }
+
+                            const hasData = signalData && Object.values(signalData).some(value => value !== null);
+                            resolve(hasData ? signalData : null);
+                        } catch (parseError) {
+                            console.warn('数据解析错误:', parseError);
+                            resolve(null);
+                        }
+                    }, 150);
+                } catch (error) {
+                    resolve(null);
+                }
+            });
+        }
+
+        // 获取信号数据
+        async function fetchSignalData() {
+            try {
+                let signalData = await parseSignalFromPage();
+                let isSimulated = false;
+
+                if (!signalData) {
+                    isSimulated = true;
+                    const basePower = state.history.power.length > 0 ?
+                        state.history.power[state.history.power.length - 1] : -85;
+                    const baseSinr = state.history.sinr.length > 0 ?
+                        state.history.sinr[state.history.sinr.length - 1] : 20;
+                    const baseRsrq = state.history.rsrq.length > 0 ?
+                        state.history.rsrq[state.history.rsrq.length - 1] : -8;
+
+                    signalData = {
+                        receivePower: (basePower - 2 + Math.random() * 4).toFixed(0),
+                        band: 'N78',
+                        sinr: (baseSinr - 1 + Math.random() * 2).toFixed(0),
+                        rsrq: (baseRsrq - 0.5 + Math.random() * 1).toFixed(0),
+                        pci: '313'
+                    };
+                }
+
+                // 更新最佳值记录
+                updateBestValues(signalData);
+
+                // 更新图表数据
+                updateChartData(signalData);
+
+                // 更新当前数值显示
+                updateCurrentValues(signalData);
+
+                // 计算趋势
+                calculateTrends(signalData);
+
+                // 计算综合评分
+                const scoreData = calculateOverallScore(signalData);
+                document.getElementById('overall_score').textContent = scoreData.score;
+                document.getElementById('score_description').textContent = scoreData.description;
+
+                state.dataSource = isSimulated ? 'simulated' : 'parsing';
+                state.sampleCount++;
+                state.lastDataTime = new Date();
+
+                updateSignalDisplay(signalData);
+
+            } catch (error) {
+                console.error('获取信号数据错误:', error);
+            }
+        }
+
+        // 更新信号显示
+        function updateSignalDisplay(data) {
+            // 更新状态指示器
+            document.getElementById('data_source_indicator').textContent =
+                state.dataSource === 'parsing' ? '实时解析' : '模拟数据';
+            document.getElementById('data_source_indicator').style.color =
+                state.dataSource === 'parsing' ? '#52ef58' : '#FF9800';
+
+            document.getElementById('sample_count').textContent = state.sampleCount;
+            document.getElementById('last_update_time').textContent =
+                state.lastDataTime ? state.lastDataTime.toLocaleTimeString() : '-';
+
+            // 更新信号强度卡片 - 绿色
+            if (data.receivePower) {
+                const powerQuality = getPowerQuality(data.receivePower);
+                document.getElementById('signal_power').textContent = `${data.receivePower} dBm`;
+                document.getElementById('signal_power').style.color = '#52ef58';
+                document.getElementById('signal_quality').textContent = powerQuality.quality;
+                document.getElementById('signal_quality').style.color = 'var(--dark-text-color)';
+
+                const avgPower = calculateAverage(state.history.power, data.receivePower);
+                document.getElementById('avg_power').textContent = `${avgPower.toFixed(0)} dBm`;
+                document.getElementById('avg_power').style.color = '#52ef58';
+                document.getElementById('stability_power').textContent = getStabilityRating(state.history.power, 'power');
+                document.getElementById('stability_power').style.color = 'var(--dark-text-color)';
+                updateStatusDots('status_dots_power', data.receivePower, 'power');
+            }
+
+            // 更新信号质量卡片 - 蓝色
+            if (data.sinr) {
+                const sinrQuality = getSinrQuality(data.sinr);
+                document.getElementById('signal_sinr').textContent = data.sinr;
+                document.getElementById('signal_sinr').style.color = '#2196F3';
+                document.getElementById('sinr_quality').textContent = sinrQuality.quality;
+                document.getElementById('sinr_quality').style.color = 'var(--dark-text-color)';
+
+                const avgSinr = calculateAverage(state.history.sinr, data.sinr);
+                document.getElementById('avg_sinr').textContent = `${avgSinr.toFixed(0)}`;
+                document.getElementById('avg_sinr').style.color = '#2196F3';
+                document.getElementById('stability_sinr').textContent = getStabilityRating(state.history.sinr, 'sinr');
+                document.getElementById('stability_sinr').style.color = 'var(--dark-text-color)';
+                updateStatusDots('status_dots_sinr', data.sinr, 'sinr');
+            }
+
+            // 更新连接质量卡片 - 橙色
+            if (data.rsrq) {
+                const rsrqQuality = getRsrqQuality(data.rsrq);
+                document.getElementById('signal_rsrq').textContent = `${data.rsrq} dB`;
+                document.getElementById('signal_rsrq').style.color = '#FF9800';
+                document.getElementById('rsrq_quality').textContent = rsrqQuality.quality;
+                document.getElementById('rsrq_quality').style.color = 'var(--dark-text-color)';
+
+                const avgRsrq = calculateAverage(state.history.rsrq, data.rsrq);
+                document.getElementById('avg_rsrq').textContent = `${avgRsrq.toFixed(0)} dB`;
+                document.getElementById('avg_rsrq').style.color = '#FF9800';
+                document.getElementById('stability_rsrq').textContent = getStabilityRating(state.history.rsrq, 'rsrq');
+                document.getElementById('stability_rsrq').style.color = 'var(--dark-text-color)';
+                updateStatusDots('status_dots_rsrq', data.rsrq, 'rsrq');
+            }
+        }
+
+        // 获取当前更新间隔
+        function getCurrentInterval() {
+            const select = document.getElementById('update_interval_select');
+            return parseInt(select.value);
+        }
+
+        // 重启监控（当间隔改变时调用）
+        function restartMonitoring() {
+            if (state.isMonitoring) {
+                clearInterval(state.monitorInterval);
+                state.monitorInterval = setInterval(fetchSignalData, getCurrentInterval());
+            }
+        }
+
+        // 切换自动监控
+        function toggleAutoMonitor() {
+            if (state.isMonitoring) {
+                clearInterval(state.monitorInterval);
+                document.getElementById('auto_monitor_btn').textContent = '开始监控';
+                document.getElementById('auto_monitor_btn').style.background = '#666';
+                state.isMonitoring = false;
+            } else {
+                state.monitorInterval = setInterval(fetchSignalData, getCurrentInterval());
+                document.getElementById('auto_monitor_btn').textContent = '监控中';
+                document.getElementById('auto_monitor_btn').style.background = '#52ef58';
+                state.isMonitoring = true;
+            }
+        }
+
+        // 初始化函数
+        function initSignalMonitor() {
+            // 初始化状态点
+            initializeStatusDots();
+
+            // 初始化图表视图按钮
+            document.getElementById('toggle_chart_btn').textContent = '视图: 全部';
+
+            // 初始化趋势显示
+            updateTrendDisplay();
+
+            // 绑定事件
+            document.getElementById('refresh_signal_btn').onclick = fetchSignalData;
+            document.getElementById('auto_monitor_btn').onclick = toggleAutoMonitor;
+            document.getElementById('toggle_chart_btn').onclick = toggleChartView;
+            document.getElementById('toggle_chart_display_btn').onclick = toggleChartDisplay;
+            document.getElementById('clear_chart_btn').onclick = clearChartData;
+
+            // 绑定更新间隔选择事件
+            document.getElementById('update_interval_select').onchange = restartMonitoring;
+
+            // 开始监控
+            fetchSignalData();
+            state.monitorInterval = setInterval(fetchSignalData, getCurrentInterval());
+        }
+
+        // 使用折叠功能
+        if (typeof collapseGen === 'function') {
+            collapseGen("#collapse_signal_btn", "#collapse_signal", "#collapse_signal", () => { });
+        } else {
+            // 备用折叠逻辑
+            const collapseBtn = document.getElementById('collapse_signal_btn');
+            const collapseElement = document.getElementById('collapse_signal');
+
+            if (collapseBtn && collapseElement) {
+                collapseBtn.innerHTML = '<button class="btn" style="padding: 2px 4px; font-size: .8rem;">展开</button>';
+                collapseBtn.onclick = () => {
+                    const isClosed = collapseElement.getAttribute('data-name') === 'close';
+                    if (isClosed) {
+                        collapseElement.style.height = 'auto';
+                        collapseElement.setAttribute('data-name', 'open');
+                        collapseBtn.innerHTML = '<button class="btn" style="padding: 2px 4px; font-size: .8rem;">收起</button>';
+                    } else {
+                        collapseElement.style.height = '0px';
+                        collapseElement.setAttribute('data-name', 'close');
+                        collapseBtn.innerHTML = '<button class="btn" style="padding: 2px 4px; font-size: .8rem;">展开</button>';
+                    }
+                };
+            }
+        }
+
+        // 延迟初始化
+        setTimeout(initSignalMonitor, 500);
+    })();
+</script>

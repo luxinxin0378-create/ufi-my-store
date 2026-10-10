@@ -1,0 +1,77 @@
+//<script>
+(() => {
+    const refreshBtn_kano = document.createElement('button')
+    refreshBtn_kano.classList.add('btn')
+    refreshBtn_kano.textContent = "SELinux"
+    let status = false
+
+    const checkAdvanceFunc = async () => {
+        const res = await runShellWithRoot('whoami')
+        if (res.content) {
+            if (res.content.includes('root')) {
+                return true
+            }
+        }
+        return false
+    }
+
+    const togglePM = async (flag = false) => {
+        try {
+            if (flag) {
+                const res = await runShellWithRoot('setenforce 1')
+                if (!res.success) {
+                    throw new Error('设置失败')
+                }
+            }
+            else {
+                const res = await runShellWithRoot('setenforce 0')
+                if (!res.success) {
+                    throw new Error('设置失败')
+                }
+            }
+        } catch {
+            createToast('切换失败')
+        }
+    }
+
+    const init = async () => {
+        const res = await runShellWithRoot('getenforce')
+        if (res.content) {
+            if (res.content.toUpperCase().includes('ENFOR')) {
+                status = true
+                refreshBtn_kano.style.backgroundColor = 'var(--dark-btn-color-active)'
+            }
+        }
+    }
+
+    const start = async () => {
+        const canUse = await checkAdvanceFunc()
+        if (!canUse) {
+            createToast('请先打开高级功能')
+            return
+        }
+        if (status) {
+            await togglePM(false)
+            status = false
+            createToast('已关闭SELinux(宽容模式)')
+            refreshBtn_kano.style.backgroundColor = ''
+        }
+        else {
+            await togglePM(true)
+            status = true
+            refreshBtn_kano.style.backgroundColor = 'var(--dark-btn-color-active)'
+            createToast('已开启SELinux(严格模式)')
+        }
+    }
+
+    refreshBtn_kano.onclick = start
+
+    collapseBtn_menu.nextElementSibling.querySelector('.collapse_box').appendChild(refreshBtn_kano)
+
+    let r = setInterval(() => {
+        if (UFI_DATA.loginfo != "ok") return
+        init()
+        clearInterval(r)
+    }, 300);
+})()
+//</script>

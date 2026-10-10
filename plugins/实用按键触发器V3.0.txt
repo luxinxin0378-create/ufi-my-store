@@ -1,0 +1,1087 @@
+//<script>
+(async () => {
+  const MODAL = 'kano_keyevent_modal';
+  const STYLE = 'kano_keyevent_style';
+  const ROOT = '/data/kano_keyevent';
+  const CONFIG = `${ROOT}/config.conf`;
+  const RULES = `${ROOT}/rules.conf`;
+  const KEY_SH = `${ROOT}/key.sh`;
+  const SERVICE_SH = `${ROOT}/service.sh`;
+  const PID = `${ROOT}/keyevent.pid`;
+  const TEST_PID = `${ROOT}/keyevent_test.pid`;
+  const LOG = `${ROOT}/keyevent.log`;
+  const BOOT = '/sdcard/ufi_tools_boot.sh';
+  const BOOT_LINE = `sh ${SERVICE_SH} start`;
+
+  const createRule = (rule = {}) => ({
+    id: `${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+    ENABLED: '1',
+    DEV: '/dev/input/event0',
+    KEY_FILTER: '',
+    MODE: 'single',
+    MULTI_COUNT: '2',
+    DOUBLE_GAP_MS: '400',
+    LONG_PRESS_MS: '2000',
+    ACTION_CMD: 'sh /data/kano_softap_manager/service.sh start',
+    ...rule
+  });
+
+  const state = {
+    installed: false,
+    running: false,
+    testRunning: false,
+    boot: false,
+    autoLog: false,
+    autoLogTimer: null,
+    installConfirm: 0,
+    installConfirmTimer: null,
+    devices: [],
+    config: {
+      TEST_DEV: '/dev/input/event0',
+      DOUBLE_GAP_MS: '400',
+      LONG_PRESS_MS: '2000',
+      rules: [createRule()]
+    }
+  };
+
+  const esc = (v) => String(v ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+  const sq = (v) => `'${String(v ?? '').replace(/'/g, `'\\''`)}'`;
+  const shdq = (v) => `"${String(v ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, '\\$')
+    .replace(/`/g, '\\`')
+    .replace(/\r?\n/g, ' ')}"`;
+
+  const run = async (cmd, timeout = 30000) => runShellWithRoot(cmd, timeout);
+  const okRoot = async () => String((await run('whoami'))?.content || '').includes('root');
+
+  const decodeShellValue = (raw) => String(raw || '')
+    .replace(/\\`/g, '`')
+    .replace(/\\\$/g, '$')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\');
+
+  const parseAssignments = (text) => {
+    const out = {};
+    const lines = String(text || '').split('\n');
+    for (const lineRaw of lines) {
+      const line = lineRaw.trim();
+      if (!line || line.startsWith('#') || !line.includes('=')) continue;
+      const i = line.indexOf('=');
+      const key = line.slice(0, i).trim();
+      let val = line.slice(i + 1).trim();
+      if (val.startsWith('"') && val.endsWith('"')) {
+        val = decodeShellValue(val.slice(1, -1));
+      } else if (val.startsWith("'") && val.endsWith("'")) {
+        val = val.slice(1, -1);
+      }
+      out[key] = val;
+    }
+    return out;
+  };
+
+  const parseRuleLine = (line) => {
+    if (String(line || '').includes('\t')) {
+      const parts = String(line || '').split('\t');
+      if (parts.length >= 8) {
+        const [ENABLED, DEV, KEY_FILTER, MODE, MULTI_COUNT, DOUBLE_GAP_MS, LONG_PRESS_MS, ...cmdParts] = parts;
+        return createRule({ ENABLED, DEV, KEY_FILTER, MODE, MULTI_COUNT, DOUBLE_GAP_MS, LONG_PRESS_MS, ACTION_CMD: cmdParts.join('\t') });
+      }
+      const [ENABLED, DEV, KEY_FILTER, MODE, MULTI_COUNT, ACTION_CMD] = parts;
+      return createRule({ ENABLED, DEV, KEY_FILTER, MODE, MULTI_COUNT, ACTION_CMD });
+    }
+    const matches = [...String(line || '').matchAll(/([A-Z_]+)=("(?:(?:\\.)|[^"])*"|'[^']*'|[^\s]+)/g)];
+    if (!matches.length) return null;
+    const rule = createRule();
+    matches.forEach((m) => {
+      const key = m[1];
+      let val = m[2] || '';
+      if (val.startsWith('"') && val.endsWith('"')) {
+        val = decodeShellValue(val.slice(1, -1));
+      } else if (val.startsWith("'") && val.endsWith("'")) {
+        val = val.slice(1, -1);
+      }
+      rule[key] = val;
+    });
+    return rule;
+  };
+
+  const ensureRules = (rules) => rules.map((rule) => createRule(rule));
+
+  const ensureStyle = () => {
+    if (document.getElementById(STYLE)) return;
+    const s = document.createElement('style');
+    s.id = STYLE;
+    s.textContent = `
+      #${MODAL} .kk-wrap{display:flex;flex-direction:column;gap:12px;font-size:.74rem;}
+      #${MODAL} .kk-card{border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03));border-radius:16px;padding:12px;}
+      #${MODAL} .kk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+      #${MODAL} .kk-grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+      #${MODAL} label{display:flex;flex-direction:column;gap:5px;font-size:.68rem;opacity:.92;}
+      #${MODAL} input,#${MODAL} select,#${MODAL} textarea{width:100%;box-sizing:border-box;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.18);color:inherit;padding:8px;font-size:.72rem;}
+      #${MODAL} textarea{min-height:220px;font-family:monospace;white-space:pre;}
+      #${MODAL} .kk-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+      #${MODAL} .kk-rule-list{display:flex;flex-direction:column;gap:10px;}
+      #${MODAL} .kk-rule{border:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.12);border-radius:14px;padding:12px;}
+      #${MODAL} .kk-rule-head{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px;}
+      #${MODAL} .kk-chip{display:inline-flex;padding:4px 9px;border-radius:999px;background:rgba(255,255,255,.08);font-size:.65rem;font-weight:700;}
+      #${MODAL} .kk-ok{color:#8ff0a7;background:rgba(78,214,118,.16);}
+      #${MODAL} .kk-bad{color:#ffaaaa;background:rgba(255,80,80,.16);}
+      #${MODAL} .kk-warn{color:#ffd08a;background:rgba(255,170,70,.16);}
+      #${MODAL} .kk-help{font-size:.65rem;line-height:1.7;opacity:.78;}
+      #${MODAL} .kk-empty{padding:14px;border:1px dashed rgba(255,255,255,.14);border-radius:12px;opacity:.76;text-align:center;}
+      #${MODAL} .kk-inline-check{display:flex;align-items:center;gap:8px;font-size:.7rem;flex-direction: row;}
+      #${MODAL} .kk-inline-check input{width:auto;transform:scale(1.1);}
+      @media (max-width:920px){#${MODAL} .kk-grid3{grid-template-columns:1fr 1fr;}}
+      @media (max-width:720px){#${MODAL} .kk-grid,#${MODAL} .kk-grid3{grid-template-columns:1fr;}#${MODAL}{width:95%!important;}}
+    `;
+    document.head.appendChild(s);
+  };
+
+  const renderIntoModal = async () => {
+    const box = document.querySelector(`#${MODAL} .content`);
+    const mod = document.querySelector(`#${MODAL}`);
+    if (!box || !mod) return;
+    box.innerHTML = render();
+    bind(mod);
+    syncAutoLogButton();
+    await loadLog();
+  };
+
+  const stopAutoLog = () => {
+    if (state.autoLogTimer) clearInterval(state.autoLogTimer);
+    state.autoLogTimer = null;
+  };
+
+  const syncAutoLogButton = () => {
+    const btn = document.querySelector('#kk_auto_log');
+    if (btn) btn.textContent = state.autoLog ? '停止自动刷新' : '开启自动刷新';
+  };
+
+  const setAutoLog = (enabled) => {
+    state.autoLog = Boolean(enabled && state.installed);
+    stopAutoLog();
+    if (state.autoLog) {
+      state.autoLogTimer = setInterval(() => {
+        if (!document.querySelector(`#${MODAL}`) || !state.installed || !state.autoLog) {
+          setAutoLog(false);
+          return;
+        }
+        loadLog();
+      }, 1000);
+    }
+    syncAutoLogButton();
+  };
+
+  const syncStateFromForm = () => {
+    const root = document.querySelector(`#${MODAL}`);
+    if (!root) return;
+    const testDev = root.querySelector('#kk_test_dev')?.value || state.config.TEST_DEV;
+    const gap = root.querySelector('#kk_gap')?.value.trim() || state.config.DOUBLE_GAP_MS;
+    const longMs = root.querySelector('#kk_long')?.value.trim() || state.config.LONG_PRESS_MS;
+    const rules = [...root.querySelectorAll('.kk-rule')].map((el) => createRule({
+      id: el.dataset.ruleId || createRule().id,
+      ENABLED: el.querySelector('[data-field="ENABLED"]')?.checked ? '1' : '0',
+      DEV: el.querySelector('[data-field="DEV"]')?.value || '/dev/input/event0',
+      KEY_FILTER: el.querySelector('[data-field="KEY_FILTER"]')?.value.trim() || '',
+      MODE: el.querySelector('[data-field="MODE"]')?.value || 'single',
+      MULTI_COUNT: el.querySelector('[data-field="MULTI_COUNT"]')?.value.trim() || '2',
+      DOUBLE_GAP_MS: el.querySelector('[data-field="DOUBLE_GAP_MS"]')?.value.trim() || gap,
+      LONG_PRESS_MS: el.querySelector('[data-field="LONG_PRESS_MS"]')?.value.trim() || longMs,
+      ACTION_CMD: el.querySelector('[data-field="ACTION_CMD"]')?.value.trim() || ''
+    }));
+    state.config = {
+      TEST_DEV: testDev,
+      DOUBLE_GAP_MS: gap,
+      LONG_PRESS_MS: longMs,
+      rules
+    };
+  };
+
+  const validateConfig = (cfg, options = {}) => {
+    const { requireRules = true } = options;
+    if (!cfg.TEST_DEV.startsWith('/dev/input/event')) return '测试监听设备不合法';
+    if (!/^\d+$/.test(cfg.DOUBLE_GAP_MS) || Number(cfg.DOUBLE_GAP_MS) < 50) return '连击间隔必须是毫秒整数';
+    if (!/^\d+$/.test(cfg.LONG_PRESS_MS) || Number(cfg.LONG_PRESS_MS) < 100) return '长按时间必须是毫秒整数';
+    if (!requireRules) return '';
+    for (let i = 0; i < cfg.rules.length; i++) {
+      const rule = cfg.rules[i];
+      if (String(rule.ENABLED) !== '1') continue;
+      if (!rule.DEV.startsWith('/dev/input/event')) return `规则 ${i + 1} 的监听设备不合法`;
+      if (!rule.KEY_FILTER) return `规则 ${i + 1} 未填写 KeyCode`;
+      if (!['single', 'multi', 'long'].includes(rule.MODE)) return `规则 ${i + 1} 的触发模式不合法`;
+      if (rule.MODE === 'multi' && (!/^\d+$/.test(rule.MULTI_COUNT) || Number(rule.MULTI_COUNT) < 2)) return `规则 ${i + 1} 的连击次数至少为 2`;
+      if (!/^\d+$/.test(rule.DOUBLE_GAP_MS) || Number(rule.DOUBLE_GAP_MS) < 50) return `规则 ${i + 1} 的连击间隔必须是毫秒整数`;
+      if (!/^\d+$/.test(rule.LONG_PRESS_MS) || Number(rule.LONG_PRESS_MS) < 100) return `规则 ${i + 1} 的长按时间必须是毫秒整数`;
+      if (!rule.ACTION_CMD) return `规则 ${i + 1} 未填写触发命令`;
+      if (/[\r\n\t]/.test(rule.ACTION_CMD)) return `规则 ${i + 1} 的触发命令不能包含换行或 Tab`;
+    }
+    return '';
+  };
+
+  const buildConfigBody = (cfg) => [
+    `TEST_DEV=${shdq(cfg.TEST_DEV)}`,
+    `DOUBLE_GAP_MS=${shdq(cfg.DOUBLE_GAP_MS)}`,
+    `LONG_PRESS_MS=${shdq(cfg.LONG_PRESS_MS)}`,
+    ''
+  ].join('\n');
+
+  const ruleField = (value) => String(value ?? '').replace(/[\r\n\t]/g, ' ');
+  const buildRulesBody = (cfg) => cfg.rules.map((rule) => [
+    ruleField(rule.ENABLED),
+    ruleField(rule.DEV),
+    ruleField(rule.KEY_FILTER),
+    ruleField(rule.MODE),
+    ruleField(rule.MULTI_COUNT),
+    ruleField(rule.DOUBLE_GAP_MS),
+    ruleField(rule.LONG_PRESS_MS),
+    ruleField(rule.ACTION_CMD)
+  ].join('\t')).join('\n') + (cfg.rules.length ? '\n' : '');
+
+  const saveConfig = async (silent = false, options = {}) => {
+    if (!state.installed && !options.allowNotInstalled) {
+      if (!silent) createToast('请先安装插件', 'pink');
+      return false;
+    }
+    syncStateFromForm();
+    const cfg = {
+      ...state.config,
+      rules: ensureRules(state.config.rules)
+    };
+    const err = validateConfig(cfg, options);
+    if (err) {
+      if (!silent) createToast(err, 'red');
+      return false;
+    }
+    const cfgBody = buildConfigBody(cfg);
+    const rulesBody = buildRulesBody(cfg);
+    const cmd = `
+      mkdir -p ${sq(ROOT)}
+      printf %s ${sq(cfgBody)} > ${sq(CONFIG)}
+      printf %s ${sq(rulesBody)} > ${sq(RULES)}
+      chmod 666 ${sq(CONFIG)} ${sq(RULES)}
+    `;
+    const r = await run(cmd);
+    if (!r?.success) {
+      if (!silent) createToast('保存配置失败', 'red');
+      return false;
+    }
+    state.config = cfg;
+    if (!silent) createToast('配置已保存', 'green');
+    await refresh();
+    return true;
+  };
+
+  const readStatus = async () => {
+    const r = await run(`
+check_pid_file() {
+  file="$1"
+  [ -f "$file" ] || return 1
+  while IFS= read -r p || [ -n "$p" ]; do
+    [ -n "$p" ] || continue
+    kill -0 "$p" 2>/dev/null && return 0
+  done < "$file"
+  return 1
+}
+[ -x ${sq(SERVICE_SH)} ] && echo installed=1 || echo installed=0
+check_pid_file ${sq(PID)} && echo running=1 || echo running=0
+check_pid_file ${sq(TEST_PID)} && echo test_running=1 || echo test_running=0
+grep -qxF ${sq(BOOT_LINE)} ${sq(BOOT)} 2>/dev/null && echo boot=1 || echo boot=0
+echo __CONFIG__
+[ -f ${sq(CONFIG)} ] && timeout 2s awk '{print}' ${sq(CONFIG)}
+echo __RULES__
+[ -f ${sq(RULES)} ] && timeout 2s awk '{print}' ${sq(RULES)}
+`);
+    const text = String(r?.content || '');
+    state.installed = /(^|\n)installed=1(\n|$)/.test(text);
+    state.running = /(^|\n)running=1(\n|$)/.test(text);
+    state.testRunning = /(^|\n)test_running=1(\n|$)/.test(text);
+    state.boot = /(^|\n)boot=1(\n|$)/.test(text);
+
+    const configPart = text.includes('__CONFIG__') ? text.split('__CONFIG__')[1].split('__RULES__')[0] : '';
+    const rulesPart = text.includes('__RULES__') ? text.split('__RULES__')[1] : '';
+    const parsedCfg = parseAssignments(configPart);
+    const parsedRules = String(rulesPart || '')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#'))
+      .map(parseRuleLine)
+      .filter(Boolean);
+
+    state.config = {
+      TEST_DEV: parsedCfg.TEST_DEV || state.config.TEST_DEV,
+      DOUBLE_GAP_MS: parsedCfg.DOUBLE_GAP_MS || state.config.DOUBLE_GAP_MS,
+      LONG_PRESS_MS: parsedCfg.LONG_PRESS_MS || state.config.LONG_PRESS_MS,
+      rules: ensureRules(parsedRules)
+    };
+  };
+
+  const loadDevices = async () => {
+    const r = await run(`
+      for d in /dev/input/event*; do
+        [ -e "$d" ] || continue
+        n="$(timeout 1s getevent -lp "$d" 2>/dev/null | awk -F'"' '/name:/{print $2; exit}')"
+        [ -n "$n" ] || n="unknown"
+        printf '%s|%s\n' "$d" "$n"
+      done
+    `, 12000);
+    state.devices = String(r?.content || '')
+      .split('\n')
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .map((x) => {
+        const [dev, ...rest] = x.split('|');
+        return { dev, name: rest.join('|') || 'unknown' };
+      });
+    const fallbackDev = state.devices[0]?.dev || '/dev/input/event0';
+    if (!state.devices.some((x) => x.dev === state.config.TEST_DEV)) state.config.TEST_DEV = fallbackDev;
+    state.config.rules = ensureRules(state.config.rules.length ? state.config.rules : []).map((rule) => ({
+      ...rule,
+      DEV: state.devices.some((x) => x.dev === rule.DEV) ? rule.DEV : fallbackDev
+    }));
+  };
+
+  const install = async () => {
+    if (!(await okRoot())) return createToast('请先启用高级功能/root', 'pink');
+    if (state.installed) {
+      clearTimeout(state.installConfirmTimer);
+      state.installConfirmTimer = setTimeout(() => state.installConfirm = 0, 2500);
+      state.installConfirm++;
+      if (state.installConfirm < 2) return createToast('已安装。再点一次执行修复/重装', 'pink');
+      state.installConfirm = 0;
+    }
+    const r = await run(`
+mkdir -p ${sq(ROOT)}
+cat > ${sq(KEY_SH)} <<'KEYEOF'
+#!/system/bin/sh
+
+DEV="\${DEV:-/dev/input/event0}"
+KEY_FILTER="$1"
+MODE="$2"
+MULTI_COUNT="$3"
+RULE_FILE=""
+[ "$MODE" = "group" ] && RULE_FILE="$3"
+ACTION_CMD="\${ACTION_CMD:-}"
+DOUBLE_GAP_MS="\${DOUBLE_GAP_MS:-400}"
+LONG_PRESS_MS="\${LONG_PRESS_MS:-2000}"
+LOG_FILE="\${LOG_FILE:-/data/kano_keyevent/keyevent.log}"
+PATH="/system/bin:/system/xbin:/vendor/bin:/sbin:$PATH"
+TAB="$(printf '\t')"
+
+down_time=0
+last_up_time=0
+tap_count=0
+pending_seq=0
+
+log_line() {
+  printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" "$1" >> "$LOG_FILE"
+}
+
+run_cmd() {
+  cmd="$1"
+  [ -n "$cmd" ] || return
+  sh -c "$cmd" >> "$LOG_FILE" 2>&1 &
+}
+
+now_ms() {
+  awk '{printf "%d\\n", $1 * 1000}' /proc/uptime
+}
+
+sleep_ms() {
+  ms="$1"
+  delay="$(awk -v ms="$ms" 'BEGIN { if (ms < 1) ms = 1; printf "%.3f", ms / 1000 }' 2>/dev/null)"
+  sleep "$delay" 2>/dev/null || sleep 1
+}
+
+parse_key_line() {
+  found=0
+  parsed_key=""
+  parsed_state=""
+  for token in "$@"; do
+    if [ "$found" = "1" ]; then
+      parsed_key="$token"
+      found=2
+      continue
+    fi
+    if [ "$found" = "2" ]; then
+      parsed_state="$token"
+      return 0
+    fi
+    [ "$token" = "EV_KEY" ] && found=1
+  done
+  return 1
+}
+
+group_has_mode() {
+  want="$1"
+  [ -f "$RULE_FILE" ] || return 1
+  while IFS="$TAB" read -r rule_mode rule_count rule_gap rule_long rule_cmd || [ -n "$rule_mode$rule_cmd" ]; do
+    [ "$rule_mode" = "$want" ] && return 0
+  done < "$RULE_FILE"
+  return 1
+}
+
+group_max_gap() {
+  max="$DOUBLE_GAP_MS"
+  [ -f "$RULE_FILE" ] || { echo "$max"; return; }
+  while IFS="$TAB" read -r rule_mode rule_count rule_gap rule_long rule_cmd || [ -n "$rule_mode$rule_cmd" ]; do
+    case "$rule_mode" in
+      single|multi)
+        [ -n "$rule_gap" ] || rule_gap="$DOUBLE_GAP_MS"
+        if [ "$rule_gap" -gt "$max" ] 2>/dev/null; then max="$rule_gap"; fi
+        ;;
+    esac
+  done < "$RULE_FILE"
+  echo "$max"
+}
+
+trigger_group_mode() {
+  want="$1"
+  detail="$2"
+  count_filter="$3"
+  long_filter="$4"
+  [ -f "$RULE_FILE" ] || return 1
+  fired=0
+  while IFS="$TAB" read -r rule_mode rule_count rule_gap rule_long rule_cmd || [ -n "$rule_mode$rule_cmd" ]; do
+    [ "$rule_mode" = "$want" ] || continue
+    if [ "$want" = "multi" ] && [ "$rule_count" != "$count_filter" ]; then continue; fi
+    if [ "$want" = "long" ] && [ "$rule_long" != "$long_filter" ]; then continue; fi
+    run_cmd "$rule_cmd"
+    log_line "trigger key=$KEY_FILTER action=$want $detail"
+    fired=1
+  done < "$RULE_FILE"
+  [ "$fired" = "1" ]
+}
+
+trigger_best_long() {
+  press_time="$1"
+  best=0
+  [ -f "$RULE_FILE" ] || return 1
+  while IFS="$TAB" read -r rule_mode rule_count rule_gap rule_long rule_cmd || [ -n "$rule_mode$rule_cmd" ]; do
+    [ "$rule_mode" = "long" ] || continue
+    [ -n "$rule_long" ] || rule_long="$LONG_PRESS_MS"
+    if [ "$press_time" -ge "$rule_long" ] 2>/dev/null && [ "$rule_long" -gt "$best" ] 2>/dev/null; then
+      best="$rule_long"
+    fi
+  done < "$RULE_FILE"
+  [ "$best" -gt 0 ] 2>/dev/null || return 1
+  trigger_group_mode "long" "press_time_ms=$press_time threshold_ms=$best" "" "$best"
+}
+
+resolve_taps() {
+  seq="$1"
+  count="$2"
+  [ -f "$PENDING_FILE" ] || return
+  [ "$(cat "$PENDING_FILE" 2>/dev/null)" = "$seq" ] || return
+  if trigger_group_mode "multi" "count=$count" "$count" ""; then
+    rm -f "$PENDING_FILE"
+    return
+  fi
+  if [ "$count" = "1" ]; then
+    trigger_group_mode "single" "count=1" "" ""
+    rm -f "$PENDING_FILE"
+  fi
+}
+
+schedule_tap_resolution() {
+  count="$1"
+  gap="$2"
+  pending_seq=$((pending_seq + 1))
+  seq="$pending_seq"
+  printf '%s' "$seq" > "$PENDING_FILE"
+  ( sleep_ms "$gap"; resolve_taps "$seq" "$count" ) &
+}
+
+handle_group_up() {
+  press_time="$1"
+  now="$2"
+  if trigger_best_long "$press_time"; then
+    pending_seq=$((pending_seq + 1))
+    printf '%s' "$pending_seq" > "$PENDING_FILE"
+    tap_count=0
+    last_up_time=0
+    return
+  fi
+
+  if ! group_has_mode "multi"; then
+    group_has_mode "single" && trigger_group_mode "single" "count=1" "" ""
+    return
+  fi
+
+  gap="$(group_max_gap)"
+  if [ "$last_up_time" -eq 0 ] || [ $((now - last_up_time)) -gt "$gap" ]; then
+    tap_count=1
+  else
+    tap_count=$((tap_count + 1))
+  fi
+  last_up_time="$now"
+  schedule_tap_resolution "$tap_count" "$gap"
+}
+
+GETEVENT_BIN="$(command -v getevent 2>/dev/null)"
+[ -n "$GETEVENT_BIN" ] || [ ! -x /system/bin/getevent ] || GETEVENT_BIN="/system/bin/getevent"
+[ -n "$GETEVENT_BIN" ] || { log_line "getevent_not_found"; exit 1; }
+[ -e "$DEV" ] || { log_line "device_not_found dev=$DEV"; exit 1; }
+[ "$MODE" != "group" ] || [ -f "$RULE_FILE" ] || { log_line "group_rules_missing path=$RULE_FILE"; exit 1; }
+log_line "watch_start dev=$DEV key=$KEY_FILTER mode=$MODE count=$MULTI_COUNT rules=$RULE_FILE"
+
+FIFO="/data/kano_keyevent/keyevent_fifo_$$"
+PENDING_FILE="/data/kano_keyevent/keyevent_pending_$$"
+GETEVENT_PID=""
+
+cleanup() {
+  [ -n "$GETEVENT_PID" ] && kill "$GETEVENT_PID" 2>/dev/null
+  [ -n "$GETEVENT_PID" ] && sleep 1
+  [ -n "$GETEVENT_PID" ] && kill -9 "$GETEVENT_PID" 2>/dev/null
+  rm -f "$FIFO" "$PENDING_FILE"
+}
+
+trap 'cleanup; exit 0' INT TERM
+trap 'cleanup' EXIT
+
+rm -f "$FIFO"
+mkfifo "$FIFO" 2>/dev/null || mknod "$FIFO" p 2>/dev/null || { log_line "fifo_create_failed fifo=$FIFO"; exit 1; }
+"$GETEVENT_BIN" -l "$DEV" > "$FIFO" 2>> "$LOG_FILE" &
+GETEVENT_PID="$!"
+
+while read -r line; do
+  case "$line" in
+    *EV_KEY*)
+      set -- $line
+      parse_key_line "$@" || { log_line "parse_failed line=$line"; continue; }
+      key="$parsed_key"
+      state="$parsed_state"
+
+      if [ -z "$KEY_FILTER" ] || [ -z "$MODE" ]; then
+        log_line "key key=$key state=$state"
+        continue
+      fi
+
+      [ "$key" != "$KEY_FILTER" ] && continue
+      now="$(now_ms)"
+
+      case "$state" in
+        DOWN|00000001)
+          down_time="$now"
+          ;;
+        UP|00000000)
+          press_time=$((now - down_time))
+          if [ "$MODE" = "group" ]; then
+            handle_group_up "$press_time" "$now"
+          else
+            case "$MODE" in
+              long)
+              if [ "$press_time" -ge "$LONG_PRESS_MS" ]; then
+                run_cmd "$ACTION_CMD"
+                log_line "trigger key=$key action=long press_time_ms=$press_time"
+              fi
+              ;;
+              multi)
+              if [ -z "$MULTI_COUNT" ] || [ "$MULTI_COUNT" -lt 2 ] 2>/dev/null; then MULTI_COUNT=2; fi
+              if [ "$last_up_time" -eq 0 ] || [ $((now - last_up_time)) -gt "$DOUBLE_GAP_MS" ]; then
+                tap_count=1
+              else
+                tap_count=$((tap_count + 1))
+              fi
+              last_up_time="$now"
+              if [ "$tap_count" -eq "$MULTI_COUNT" ]; then
+                run_cmd "$ACTION_CMD"
+                log_line "trigger key=$key action=multi count=$tap_count"
+                tap_count=0
+                last_up_time=0
+              fi
+              ;;
+              single)
+              run_cmd "$ACTION_CMD"
+              log_line "trigger key=$key action=single"
+              ;;
+              *)
+              log_line "unknown_mode mode=$MODE"
+              ;;
+            esac
+          fi
+          ;;
+      esac
+      ;;
+  esac
+done < "$FIFO"
+KEYEOF
+
+cat > ${sq(SERVICE_SH)} <<'SVCEOF'
+#!/system/bin/sh
+ROOT="/data/kano_keyevent"
+CONFIG="$ROOT/config.conf"
+RULES="$ROOT/rules.conf"
+PID="$ROOT/keyevent.pid"
+TEST_PID="$ROOT/keyevent_test.pid"
+LOG="$ROOT/keyevent.log"
+KEY_SH="$ROOT/key.sh"
+PATH="/system/bin:/system/xbin:/vendor/bin:/sbin:$PATH"
+
+log_service() {
+  mkdir -p "$ROOT"
+  printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" "$1" >> "$LOG"
+}
+
+load_config() {
+  [ -f "$CONFIG" ] || return
+  . "$CONFIG"
+}
+
+pid_file_running() {
+  file="$1"
+  [ -f "$file" ] || return 1
+  while IFS= read -r p || [ -n "$p" ]; do
+    [ -n "$p" ] || continue
+    kill -0 "$p" 2>/dev/null && return 0
+  done < "$file"
+  return 1
+}
+
+stop_pid_file() {
+  file="$1"
+  [ -f "$file" ] || return 0
+  while IFS= read -r p || [ -n "$p" ]; do
+    [ -n "$p" ] || continue
+    kill "$p" 2>/dev/null
+    sleep 1
+    kill -9 "$p" 2>/dev/null
+  done < "$file"
+  rm -f "$file"
+}
+
+kill_tree() {
+  parent="$1"
+  [ -n "$parent" ] || return 0
+  for child in $(ps 2>/dev/null | awk -v p="$parent" '$3 == p {print $2}'); do
+    kill_tree "$child"
+  done
+  kill "$parent" 2>/dev/null
+  sleep 1
+  kill -9 "$parent" 2>/dev/null
+}
+
+kill_matching_processes() {
+  (ps -ef 2>/dev/null || ps 2>/dev/null) | awk '/\/data\/kano_keyevent\/key.sh|\/data\/kano_keyevent\/service.sh|\/data\/kano_keyevent|keyevent_fifo_|\/dev\/input\/event/ {print $2}' | while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    [ "$p" = "$$" ] && continue
+    [ "$p" = "$PPID" ] && continue
+    kill_tree "$p"
+  done
+}
+
+stop_all_watchers() {
+  stop_pid_file "$PID"
+  stop_pid_file "$TEST_PID"
+  kill_matching_processes
+  rm -f "$PID" "$TEST_PID"
+  rm -f "$ROOT"/keyevent_group_*.rules "$ROOT"/keyevent_groups.tmp
+}
+
+start_service() {
+  mkdir -p "$ROOT"
+  touch "$LOG"
+  log_service "service_start_requested"
+  stop_all_watchers
+  load_config
+  [ -f "$KEY_SH" ] || { log_service "key_script_missing path=$KEY_SH"; echo "key script missing"; return 1; }
+  [ -f "$RULES" ] || { log_service "rules_missing path=$RULES"; echo "rules missing"; return 1; }
+  export DOUBLE_GAP_MS="\${DOUBLE_GAP_MS:-400}"
+  export LONG_PRESS_MS="\${LONG_PRESS_MS:-2000}"
+  export LOG_FILE="$LOG"
+  DEFAULT_DOUBLE_GAP_MS="$DOUBLE_GAP_MS"
+  DEFAULT_LONG_PRESS_MS="$LONG_PRESS_MS"
+  TAB="$(printf '\t')"
+  count=0
+  rule_count=0
+  group_count=0
+  GROUPS="$ROOT/keyevent_groups.tmp"
+  rm -f "$GROUPS" "$ROOT"/keyevent_group_*.rules
+  : > "$PID"
+  : > "$GROUPS"
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "$line" ] || continue
+    [ "\${line#\#}" != "$line" ] && { log_service "rule_skip comment"; continue; }
+    [ "\${line#ENABLED=}" != "$line" ] && { log_service "rule_skip old_format_need_save"; continue; }
+    ENABLED="$(printf '%s\n' "$line" | cut -f1)"
+    DEV="$(printf '%s\n' "$line" | cut -f2)"
+    KEY_FILTER="$(printf '%s\n' "$line" | cut -f3)"
+    MODE="$(printf '%s\n' "$line" | cut -f4)"
+    MULTI_COUNT="$(printf '%s\n' "$line" | cut -f5)"
+    RULE_DOUBLE_GAP_MS="$(printf '%s\n' "$line" | cut -f6)"
+    RULE_LONG_PRESS_MS="$(printf '%s\n' "$line" | cut -f7)"
+    ACTION_CMD="$(printf '%s\n' "$line" | cut -f8-)"
+    if [ -z "$ACTION_CMD" ] && [ -z "$RULE_LONG_PRESS_MS" ]; then
+      ACTION_CMD="$RULE_DOUBLE_GAP_MS"
+      RULE_DOUBLE_GAP_MS="$DEFAULT_DOUBLE_GAP_MS"
+      RULE_LONG_PRESS_MS="$DEFAULT_LONG_PRESS_MS"
+    fi
+    [ -n "$RULE_DOUBLE_GAP_MS" ] || RULE_DOUBLE_GAP_MS="$DEFAULT_DOUBLE_GAP_MS"
+    [ -n "$RULE_LONG_PRESS_MS" ] || RULE_LONG_PRESS_MS="$DEFAULT_LONG_PRESS_MS"
+    [ "\${ENABLED:-1}" = "1" ] || { log_service "rule_skip disabled"; continue; }
+    [ -n "$DEV" ] || { log_service "rule_skip empty_dev"; continue; }
+    [ -n "$KEY_FILTER" ] || { log_service "rule_skip empty_key dev=$DEV"; continue; }
+    [ -n "$MODE" ] || { log_service "rule_skip empty_mode key=$KEY_FILTER"; continue; }
+    group_file="$(awk -v d="$DEV" -v k="$KEY_FILTER" 'BEGIN{FS="\t"} $1 == d && $2 == k {print $3; exit}' "$GROUPS" 2>/dev/null)"
+    if [ -z "$group_file" ]; then
+      group_count=$((group_count + 1))
+      group_file="$ROOT/keyevent_group_$group_count.rules"
+      : > "$group_file"
+      printf '%s\t%s\t%s\n' "$DEV" "$KEY_FILTER" "$group_file" >> "$GROUPS"
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\n' "$MODE" "$MULTI_COUNT" "$RULE_DOUBLE_GAP_MS" "$RULE_LONG_PRESS_MS" "$ACTION_CMD" >> "$group_file"
+    log_service "rule_grouped dev=$DEV key=$KEY_FILTER mode=$MODE gap_ms=$RULE_DOUBLE_GAP_MS long_ms=$RULE_LONG_PRESS_MS group=$group_file"
+    rule_count=$((rule_count + 1))
+  done < "$RULES"
+  if [ "$rule_count" -eq 0 ]; then
+    rm -f "$PID" "$GROUPS" "$ROOT"/keyevent_group_*.rules
+    log_service "service_start_failed no_enabled_rules"
+    echo "no enabled rules"
+    return 1
+  fi
+  while IFS="$TAB" read -r GROUP_DEV GROUP_KEY GROUP_FILE || [ -n "$GROUP_DEV$GROUP_KEY$GROUP_FILE" ]; do
+    [ -n "$GROUP_DEV" ] || continue
+    export DEV="$GROUP_DEV"
+    export LOG_FILE="$LOG"
+    log_service "group_launch dev=$GROUP_DEV key=$GROUP_KEY rules=$GROUP_FILE"
+    sh "$KEY_SH" "$GROUP_KEY" group "$GROUP_FILE" </dev/null >> "$LOG" 2>&1 &
+    echo $! >> "$PID"
+    count=$((count + 1))
+  done < "$GROUPS"
+  if [ "$count" -eq 0 ]; then
+    rm -f "$PID" "$GROUPS" "$ROOT"/keyevent_group_*.rules
+    log_service "service_start_failed no_watchers"
+    echo "no watchers"
+    return 1
+  fi
+  sleep 1
+  if ! pid_file_running "$PID"; then
+    log_service "service_started_but_dead"
+    echo "started but stopped"
+    return 1
+  fi
+  log_service "service_started watchers=$count rules=$rule_count"
+  echo "started:$count rules:$rule_count"
+}
+
+stop_service() {
+  stop_all_watchers
+  echo "stopped"
+}
+
+start_test() {
+  mkdir -p "$ROOT"
+  touch "$LOG"
+  log_service "test_start_requested"
+  stop_all_watchers
+  load_config
+  [ -f "$KEY_SH" ] || { log_service "key_script_missing path=$KEY_SH"; echo "key script missing"; return 1; }
+  export DEV="\${TEST_DEV:-/dev/input/event0}"
+  export ACTION_CMD=""
+  export DOUBLE_GAP_MS="\${DOUBLE_GAP_MS:-400}"
+  export LONG_PRESS_MS="\${LONG_PRESS_MS:-2000}"
+  export LOG_FILE="$LOG"
+  log_service "test_launch dev=$DEV"
+  sh "$KEY_SH" </dev/null >> "$LOG" 2>&1 &
+  echo $! > "$TEST_PID"
+  sleep 1
+  if ! pid_file_running "$TEST_PID"; then
+    log_service "test_started_but_dead"
+    echo "test started but stopped"
+    return 1
+  fi
+  echo "test started"
+}
+
+stop_test() {
+  stop_all_watchers
+  echo "test stopped"
+}
+
+status() {
+  pid_file_running "$PID" && echo main=running || echo main=stopped
+  pid_file_running "$TEST_PID" && echo test=running || echo test=stopped
+}
+
+case "$1" in
+  start) start_service ;;
+  stop) stop_service ;;
+  restart) stop_service; start_service ;;
+  start_test) start_test ;;
+  stop_test) stop_test ;;
+  restart_test) stop_test; start_test ;;
+  status) status ;;
+  *) echo "usage: $0 start|stop|restart|start_test|stop_test|restart_test|status" ;;
+esac
+SVCEOF
+
+[ -f ${sq(CONFIG)} ] || cat > ${sq(CONFIG)} <<'CFGEOF'
+TEST_DEV="/dev/input/event0"
+DOUBLE_GAP_MS="400"
+LONG_PRESS_MS="2000"
+CFGEOF
+
+[ -f ${sq(RULES)} ] || cat > ${sq(RULES)} <<'RULESEOF'
+1	/dev/input/event0	KEY_VOLUMEUP	single	2	400	2000	sh /data/kano_softap_manager/service.sh start
+RULESEOF
+[ -f ${sq(RULES)} ] && grep -q '^ENABLED=' ${sq(RULES)} 2>/dev/null && cat > ${sq(RULES)} <<'RULESEOF'
+1	/dev/input/event0	KEY_VOLUMEUP	single	2	400	2000	sh /data/kano_softap_manager/service.sh start
+RULESEOF
+
+touch ${sq(LOG)}
+printf '%s install_completed\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" >> ${sq(LOG)}
+chmod 777 ${sq(ROOT)} ${sq(KEY_SH)} ${sq(SERVICE_SH)} ${sq(CONFIG)} ${sq(RULES)} ${sq(LOG)}
+`, 30000);
+    if (!r?.success) return createToast('安装失败：' + esc(r?.content || ''), 'red', 5000);
+    createToast('安装完成', 'green');
+    await refresh();
+    setAutoLog(true);
+  };
+
+  const service = async (act, saveBefore = false) => {
+    if (!(await okRoot())) return createToast('请先启用高级功能/root', 'pink');
+    if (!state.installed) return createToast('请先安装插件', 'pink');
+    if (saveBefore) {
+      const ok = await saveConfig(false, {
+        requireRules: act === 'start' || act === 'restart'
+      });
+      if (!ok) return;
+    }
+    const r = await run(`
+      mkdir -p ${sq(ROOT)}
+      printf '%s frontend_service_request act=${act}\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" >> ${sq(LOG)}
+      sh ${sq(SERVICE_SH)} ${act}
+    `, 15000);
+    if (!r?.success && !String(r?.content || '').includes('no enabled rules')) {
+      createToast(`${act} 失败：${esc(r?.content || '无输出')}`, 'red', 6000);
+      await loadLog();
+      return;
+    }
+    createToast(String(r?.content || `${act} ok`).trim() || `${act} ok`, r?.success ? 'green' : 'pink');
+    await refresh();
+    await loadLog();
+  };
+
+  const toggleBoot = async () => {
+    if (!(await okRoot())) return createToast('请先启用高级功能/root', 'pink');
+    if (!state.installed) return createToast('请先安装插件', 'pink');
+    const cmd = state.boot
+      ? `sed -i '/kano_keyevent/d' ${sq(BOOT)}`
+      : `touch ${sq(BOOT)} && grep -qxF ${sq(BOOT_LINE)} ${sq(BOOT)} || echo ${sq(BOOT_LINE)} >> ${sq(BOOT)}`;
+    const r = await run(cmd);
+    if (!r?.success) return createToast('修改开机自启失败', 'red');
+    createToast(state.boot ? '已取消开机自启' : '已设置开机自启', 'green');
+    await refresh();
+  };
+
+  let uninstallClicks = 0;
+  let uninstallTimer = null;
+  const uninstall = async () => {
+    if (!(await okRoot())) return createToast('请先启用高级功能/root', 'pink');
+    if (!state.installed) return createToast('当前未安装，无需卸载', 'pink');
+    clearTimeout(uninstallTimer);
+    uninstallTimer = setTimeout(() => uninstallClicks = 0, 2500);
+    uninstallClicks++;
+    if (uninstallClicks < 2) return createToast('再点一次确认卸载并清理环境', 'pink');
+    uninstallClicks = 0;
+    await run(`
+      sh ${sq(SERVICE_SH)} stop 2>/dev/null
+      sh ${sq(SERVICE_SH)} stop_test 2>/dev/null
+      (ps -ef 2>/dev/null || ps 2>/dev/null) | awk '/\\/data\\/kano_keyevent\\/key.sh|\\/data\\/kano_keyevent\\/service.sh|\\/data\\/kano_keyevent|keyevent_fifo_|\\/dev\\/input\\/event/ {print $2}' | while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        [ "$p" = "$$" ] && continue
+        kill "$p" 2>/dev/null
+        sleep 1
+        kill -9 "$p" 2>/dev/null
+      done
+      sed -i '/kano_keyevent/d' ${sq(BOOT)} 2>/dev/null
+      rm -rf ${sq(ROOT)}
+    `);
+    createToast('已卸载并清理', 'green');
+    await refresh();
+  };
+
+  const loadLog = async () => {
+    const el = document.querySelector('#kk_log');
+    if (!el) return;
+    const r = await run(`[ -f ${sq(LOG)} ] && timeout 2s awk '{ lines[NR % 160] = $0 } END { start = NR > 160 ? NR - 159 : 1; for (i = start; i <= NR; i++) print lines[i % 160] }' ${sq(LOG)}`, 5000);
+    el.value = String(r?.content || '');
+    el.scrollTop = el.scrollHeight;
+  };
+
+  const clearLog = async () => {
+    if (!state.installed) return createToast('请先安装插件', 'pink');
+    const r = await run(`mkdir -p ${sq(ROOT)} && : > ${sq(LOG)} && chmod 666 ${sq(LOG)}`);
+    if (!r?.success) return createToast('清空日志失败', 'red');
+    createToast('日志已清空', 'green');
+    await loadLog();
+  };
+
+  const getDeviceOptions = (selected) => {
+    if (!state.devices.length) return `<option value="${esc(selected || '/dev/input/event0')}">${esc(selected || '/dev/input/event0')}</option>`;
+    return state.devices.map((x) => `<option value="${esc(x.dev)}" ${x.dev === selected ? 'selected' : ''}>${esc(x.dev)} - ${esc(x.name)}</option>`).join('');
+  };
+
+  const renderRule = (rule, index) => {
+    const modeOpts = [
+      ['single', '单击 single'],
+      ['multi', '连击 multi'],
+      ['long', '长按 long']
+    ].map(([v, t]) => `<option value="${v}" ${rule.MODE === v ? 'selected' : ''}>${t}</option>`).join('');
+    return `
+      <div class="kk-rule" data-rule-id="${esc(rule.id)}">
+        <div class="kk-rule-head">
+          <div class="kk-row">
+            <span class="kk-chip">${index + 1}</span>
+            <label class="kk-inline-check"><input type="checkbox" data-field="ENABLED" ${String(rule.ENABLED) === '1' ? 'checked' : ''}>启用此规则</label>
+          </div>
+          <button data-act="remove-rule" data-rule-id="${esc(rule.id)}">删除</button>
+        </div>
+        <div class="kk-grid3">
+          <label>监听设备<select data-field="DEV">${getDeviceOptions(rule.DEV)}</select></label>
+          <label>触发模式<select data-field="MODE">${modeOpts}</select></label>
+          <label>KeyCode<input data-field="KEY_FILTER" placeholder="例如 KEY_VOLUMEUP" value="${esc(rule.KEY_FILTER)}"></label>
+          <label>连击次数<input data-field="MULTI_COUNT" type="number" min="2" value="${esc(rule.MULTI_COUNT || '2')}"></label>
+          <label>连击间隔 ms<input data-field="DOUBLE_GAP_MS" type="number" min="50" value="${esc(rule.DOUBLE_GAP_MS || '400')}"></label>
+          <label>长按时间 ms<input data-field="LONG_PRESS_MS" type="number" min="100" value="${esc(rule.LONG_PRESS_MS || '2000')}"></label>
+          <label style="grid-column:1/-1;">触发命令<input data-field="ACTION_CMD" placeholder="例如 sh /data/kano_softap_manager/service.sh start" value="${esc(rule.ACTION_CMD)}"></label>
+        </div>
+      </div>
+    `;
+  };
+
+  const render = () => {
+    const cfg = state.config;
+    const rulesHtml = cfg.rules.length
+      ? cfg.rules.map(renderRule).join('')
+      : `<div class="kk-empty">当前没有监听规则，点击“新增监听规则”即可继续添加。</div>`;
+    return `
+      <div class="kk-wrap">
+        <div class="kk-card">
+          <div class="kk-row">
+            <span class="kk-chip ${state.installed ? 'kk-ok' : 'kk-bad'}">${state.installed ? '已安装' : '未安装'}</span>
+            <span class="kk-chip ${state.running ? 'kk-ok' : 'kk-warn'}">${state.running ? '规则监听中' : '规则未运行'}</span>
+            <span class="kk-chip ${state.testRunning ? 'kk-ok' : 'kk-warn'}">${state.testRunning ? '测试抓取中' : '测试未运行'}</span>
+            <span class="kk-chip ${state.boot ? 'kk-ok' : 'kk-warn'}">${state.boot ? '已自启' : '未自启'}</span>
+          </div>
+        </div>
+
+        <div class="kk-card kk-grid">
+          <label>测试监听设备<select id="kk_test_dev">${getDeviceOptions(cfg.TEST_DEV)}</select></label>
+          <label>测试/默认连击间隔 ms<input id="kk_gap" type="number" min="50" value="${esc(cfg.DOUBLE_GAP_MS || '400')}"></label>
+          <label>测试/默认长按时间 ms<input id="kk_long" type="number" min="100" value="${esc(cfg.LONG_PRESS_MS || '2000')}"></label>
+        </div>
+
+        <div class="kk-card">
+          <div class="kk-row" style="justify-content:space-between;margin-bottom:8px;">
+            <b>监听规则</b>
+            <button id="kk_add_rule">新增监听规则</button>
+          </div>
+          <div class="kk-rule-list">${rulesHtml}</div>
+        </div>
+
+        <div class="kk-card kk-help">
+          同一设备同一 KeyCode 会自动合并到一个后台状态机里，因此长按、单击、连击可以共存。优先级为长按优先；存在连击规则时，单击会等待连击间隔结束后再确认，避免双击第一下误触发单击。每条规则可以单独设置连击间隔和长按时间。测试模式不会执行命令，只会把抓到的 key/state 记进日志，适合先找 KeyCode。
+        </div>
+
+        <div class="kk-card">
+          <div class="kk-row">
+            <button id="kk_install">${state.installed ? '修复/重装' : '安装'}</button>
+            <button id="kk_save" ${state.installed ? '' : 'disabled'}>保存配置</button>
+            <button id="kk_start" ${state.installed ? '' : 'disabled'}>启动规则监听</button>
+            <button id="kk_stop" ${state.installed ? '' : 'disabled'}>停止规则监听</button>
+            <button id="kk_restart" ${state.installed ? '' : 'disabled'}>重启规则监听</button>
+            <button id="kk_test_start" ${state.installed ? '' : 'disabled'}>启动测试抓取</button>
+            <button id="kk_test_stop" ${state.installed ? '' : 'disabled'}>停止测试抓取</button>
+            <button id="kk_boot" ${state.installed ? '' : 'disabled'}>${state.boot ? '取消自启' : '开机自启'}</button>
+            <button id="kk_uninstall" ${state.installed ? '' : 'disabled'}>卸载</button>
+          </div>
+        </div>
+
+        <div class="kk-card">
+          <div class="kk-row" style="justify-content:space-between;margin-bottom:8px;">
+            <b>运行日志(请自行点击刷新)</b>
+            <span class="kk-row"><button id="kk_auto_log" ${state.installed ? '' : 'disabled'}>${state.autoLog ? '停止自动刷新' : '开启自动刷新'}</button><button id="kk_refresh_log">刷新</button><button id="kk_clear_log" ${state.installed ? '' : 'disabled'}>清空</button></span>
+          </div>
+          <textarea id="kk_log" readonly></textarea>
+        </div>
+      </div>
+    `;
+  };
+
+  const bind = (el) => {
+    el.querySelector('#kk_install').onclick = install;
+    el.querySelector('#kk_save').onclick = () => saveConfig(false);
+    el.querySelector('#kk_start').onclick = () => service('start', true);
+    el.querySelector('#kk_stop').onclick = () => service('stop');
+    el.querySelector('#kk_restart').onclick = () => service('restart', true);
+    el.querySelector('#kk_test_start').onclick = () => service('start_test', true);
+    el.querySelector('#kk_test_stop').onclick = () => service('stop_test');
+    el.querySelector('#kk_boot').onclick = toggleBoot;
+    el.querySelector('#kk_uninstall').onclick = uninstall;
+    el.querySelector('#kk_refresh_log').onclick = loadLog;
+    el.querySelector('#kk_clear_log').onclick = clearLog;
+    el.querySelector('#kk_auto_log').onclick = () => setAutoLog(!state.autoLog);
+    el.querySelector('#kk_add_rule').onclick = async () => {
+      syncStateFromForm();
+      state.config.rules.push(createRule({
+        DEV: state.config.TEST_DEV || state.devices[0]?.dev || '/dev/input/event0',
+        DOUBLE_GAP_MS: state.config.DOUBLE_GAP_MS || '400',
+        LONG_PRESS_MS: state.config.LONG_PRESS_MS || '2000'
+      }));
+      await renderIntoModal();
+    };
+    el.querySelectorAll('[data-act="remove-rule"]').forEach((btn) => {
+      btn.onclick = async () => {
+        syncStateFromForm();
+        state.config.rules = state.config.rules.filter((rule) => rule.id !== btn.dataset.ruleId);
+        await renderIntoModal();
+      };
+    });
+  };
+
+  const refresh = async () => {
+    await readStatus();
+    await loadDevices();
+    if (!state.installed && state.autoLog) setAutoLog(false);
+    await renderIntoModal();
+  };
+
+  const openModal = async () => {
+    ensureStyle();
+    const { close } = createFixedToast('kano_t_keyevent_loading', '初始化中...');
+    document.querySelector(`#${MODAL}`)?.remove();
+    await readStatus();
+    await loadDevices();
+    const { id, el } = createModal({
+      name: MODAL,
+      title: '实用按键触发器',
+      maxWidth: '980px',
+      contentStyle: 'max-height: 72vh;',
+      showConfirm: false,
+      onClose: () => {
+        setAutoLog(false);
+        return true;
+      },
+      content: render()
+    });
+    bind(el);
+    showModal(id);
+    await loadLog();
+    setAutoLog(state.installed);
+    close();
+  };
+
+  const mainBtn = document.createElement('button');
+  mainBtn.textContent = '按键触发器';
+  mainBtn.onclick = openModal;
+  document.querySelector('.actions-buttons')?.appendChild(mainBtn);
+})();
+//</script>

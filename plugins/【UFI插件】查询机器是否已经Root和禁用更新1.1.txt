@@ -1,0 +1,81 @@
+//<script>
+(() => {
+  const checkAdvanceFunc = async () => {
+    const res = await runShellWithRoot('whoami');
+    if (res.content) {
+      if (res.content.includes('root')) {
+        return true;
+      }
+    }
+    return false;
+  };
+  const refreshBtn_kano = document.createElement('button');
+  refreshBtn_kano.textContent = '查询Root状态与FOTA更新状态';
+  refreshBtn_kano.onclick = async () => {
+    let isMagiskRoot = false;
+    let isDisabledFotaForce = false;
+
+    if (!(await checkAdvanceFunc())) {
+      return createToast('请先打开高级功能！');
+    }
+    const res = await runShellWithRoot(`ls /debug_ramdisk/`);
+    const res1 = await runShellWithRoot(
+      `timeout 2s  awk '{print}' /debug_ramdisk/start_adbip.sh | grep disable_fota`,
+    );
+    if (res.content.includes('magisk')) {
+      isMagiskRoot = true;
+    }
+    if (
+      res.content.includes('disable_fota') ||
+      res1.content.includes('disable_fota')
+    ) {
+      isDisabledFotaForce = true;
+    }
+    if (isMagiskRoot) {
+      createToast('检测到您已Root！', 'pink');
+    } else {
+      createToast('检测到您还没有Root！', 'pink');
+    }
+    if (isDisabledFotaForce) {
+      createToast('检测到您的Magisk已经部署禁用FOTA更新补丁！', 'pink');
+    } else {
+      const { el, close } = createFixedToast(
+        'kano_magisk_help_message',
+        `
+                    <div style="pointer-events:all;width:80vw;max-width:600px">
+                        <div class="title" style="margin:0">插件提示</div>
+                        <div style="margin:10px 0;max-height:400px;overflow:auto">
+                        <p style="color:pink;margin: 0 0 10px 0;font-size: 1rem;">检测到您的Magisk没有内置禁用更新补丁！</p>
+                        <p style="color:pink;margin: 0 0 10px 0;font-size: .8rem;">内置禁用更新补丁可永久禁止系统更新(即使设备恢复出厂也不会被更新)</p>
+                        <p style="color:pink;margin: 0 0 10px 0;font-size: .8rem;">补丁包含Root管理器，可以安装各种模块，扩展功能</p>
+                        <p style="color:pink;margin: 0 0 10px 0;font-size: .8rem;">补丁不会对启动速度，网速延迟造成任何影响，也不会更改设备串号</p>
+                        <div class="title" style="margin-bottom:6px">解决方法：</div>
+                        <div style="display:flex;flex-direction:column;gap:6px">
+                            <div>1.在QQ群内下载Root+禁用更新补丁包，自行选择您目前系统对应的包，根据包内说明刷入即可</div>
+                            <div>2.若您没有QQ群，群号：1016263950、262019320、950666902</div>
+                            <div>3.您也可以直接点击123盘链接下载补丁包：<a href="https://www.123865.com/s/7oa5Vv-h0yD3?pwd=xk9q#" target="_blank"><b>点我下载补丁包</b></a></div>
+                        </div>
+                        </div>
+                        <div style="text-align:right">
+                            <button style="font-size:.64rem" id="close_magisk_help_btn" data-i18n="pay_btn_dismiss">${t('pay_btn_dismiss')}</button>
+                        </div>
+                    </div>
+                    `,
+      );
+      const btn = el.querySelector('#close_magisk_help_btn');
+      if (!btn) {
+        close();
+      }
+      btn.onclick = async () => {
+        close();
+      };
+    }
+    if (isMagiskRoot && isDisabledFotaForce) {
+      createToast('完美，你的设备可以养老了！', 'pink');
+    }
+  };
+  collapseBtn_menu.nextElementSibling
+    .querySelector('.collapse_box')
+    .appendChild(refreshBtn_kano);
+})();
+//</script>

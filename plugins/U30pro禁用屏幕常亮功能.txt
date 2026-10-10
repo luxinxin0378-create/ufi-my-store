@@ -1,0 +1,16 @@
+//<script>
+(() => {
+    const refreshBtn_kano = document.createElement('button')
+    refreshBtn_kano.classList.add('btn')
+    refreshBtn_kano.textContent = "禁用屏幕常亮"
+
+    const start = async () => {
+        
+       toggleWakeLock(false)
+    }
+
+    refreshBtn_kano.onclick = start
+
+    collapseBtn_menu.nextElementSibling.querySelector('.collapse_box').appendChild(refreshBtn_kano)
+})()
+//</script>

@@ -1,0 +1,450 @@
+<script>
+    (() => {
+        const container = document.querySelector('.functions-container');
+        container.insertAdjacentHTML("afterend", `
+<div id="BATTERY_DISPLAY" style="width: 100%; margin-top: 10px;">
+    <div class="title" style="margin: 6px 0; color: #fff; display: flex; align-items: center; gap: 15px;">
+        <strong style="color:#fff;">电池监控</strong>
+        <div style="display: inline-block;" id="collapse_battery_btn"></div>
+    </div>
+    <div class="collapse" id="collapse_battery" data-name="close" style="height: 0px; overflow: hidden;">
+        <div class="collapse_box" style="background: var(--dark-card-bg);padding: 10px;border-radius: 10px;">
+            <ul class="deviceList" style="margin:0;padding:0;list-style:none;">
+                <li style="padding:2px; margin-bottom: 2px; border-radius: 10px; background: transparent;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
+                            <div style="position: relative; width: 160px; height: 160px;">
+                                <svg width="160" height="160" viewBox="0 0 160 160">
+                                    <circle cx="80" cy="80" r="70" fill="none" stroke="#44475a" stroke-width="8" />
+                                    <circle id="battery_ring" cx="80" cy="80" r="70" fill="none" stroke="#50fa7b" 
+                                            stroke-width="8" stroke-dasharray="439.6" stroke-dashoffset="0" 
+                                            stroke-linecap="round" transform="rotate(-90 80 80)" />
+                                    <text id="battery_percent" x="83" y="65" text-anchor="middle" 
+                                          dominant-baseline="middle" font-size="32" fill="#f8f8f2" font-weight="bold">--%</text>
+                                    <text id="battery_status" x="80" y="100" text-anchor="middle" 
+                                          dominant-baseline="middle" font-size="16" fill="#6272a4">状态</text>
+                                </svg>
+                                <div id="battery_icon" style="position: absolute; top: 12px; right: 12px; font-size: 20px;">🔋</div>
+                            </div>
+                            
+                            <div style="margin-top: 10px; display: flex; gap: 10px;">
+                                <div style="text-align: center; background: var(--dark-card-bg); padding: 8px; border-radius: 8px;">
+                                    <div style="font-size: 12px; color: #bd93f9;">电池温度</div>
+                                    <div id="battery_temp" style="font-size: 18px; font-weight: bold; color: #50fa7b;">--<span style="color: #5cdbd3;">°C</span></div>
+                                </div>
+                                <div style="text-align: center; background: var(--dark-card-bg); padding: 8px; border-radius: 8px;">
+                                    <div style="font-size: 12px; color: #bd93f9;">CPU温度</div>
+                                    <div id="cpu_temp" style="font-size: 18px; font-weight: bold; color: #50fa7b;">--<span style="color: #5cdbd3;">°C</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+						
+                                <div style="background: var(--dark-card-bg); padding: 10px; border-radius: 8px;">
+                                    <div style="font-size: 12px; color: #bd93f9;">电压<span style="color: #5cdbd3;"> V</span></div>
+                                    <div id="battery_voltage" style="font-size: 16px; color: #f8f8f2;">--</div>
+                                </div>
+                                <div style="background: var(--dark-card-bg); padding: 10px; border-radius: 8px;">
+                                    <div style="font-size: 12px; color: #bd93f9;">电流<span style="color: #5cdbd3;"> mA</span></div>
+                                    <div id="battery_current" style="font-size: 16px; color: #f8f8f2;">--</div>
+                                </div>
+                                <div style="background: var(--dark-card-bg); padding: 10px; border-radius: 8px;">
+                                    <div style="font-size: 12px; color: #bd93f9;">功率<span style="color: #5cdbd3;"> W</span></div>
+                                    <div id="battery_power" style="font-size: 16px; color: #f8f8f2;">--</div>
+                                </div>
+                                <div style="background: var(--dark-card-bg); padding: 10px; border-radius: 8px;">
+                                    <div style="font-size: 12px; color: #bd93f9;">技术<span style="color: #5cdbd3;"> Li</span></div>
+                                    <div id="battery_tech" style="font-size: 16px; color: #f8f8f2;">--</div>
+                                </div>
+                                <div style="grid-column: 1 / -1; background: var(--dark-card-bg); padding: 26px 10px; border-radius: 8px;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                        <div style="font-size: 14px; color: #bd93f9;">电池容量</div>
+                                        <div id="battery_capacity" style="font-size: 14px; color: #f8f8f2;">0/0 <span style="color: #5cdbd3;">mAh</span></div>
+                                    </div>
+                                    <div style="height: 12px; background: #44475a; border-radius: 6px; overflow: hidden;">
+                                        <div id="battery_capacity_bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #ff5555, #ffb86c, #50fa7b); border-radius: 6px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+`);
+
+        const PLUGIN_CONFIG = {
+            BATTERY_PATHS: {
+                TEMP: "/sys/class/power_supply/battery/temp",
+                TECHNOLOGY: "/sys/class/power_supply/battery/technology",
+                CHARGE_FULL: "/sys/class/power_supply/battery/charge_full",
+                CHARGE_FULL_DESIGN: "/sys/class/power_supply/battery/charge_full_design",
+                CHARGE_COUNTER: "/sys/class/power_supply/battery/charge_counter"
+            },
+
+            STATUS_MAP: {
+                "Charging": { text: "充电中", color: "#50fa7b", icon: "⚡️" },
+                "Discharging": { text: "放电中", color: "#ffb86c", icon: "🔋" },
+                "Unknown": { text: "未知", color: "#bd93f9", icon: "❓" }
+            },
+
+            VOLTAGE_CURRENT_UPDATE_INTERVAL: 1000,
+            FULL_UPDATE_INTERVAL: 5000,
+            SHELL_BATTERY_TEMP_INTERVAL: 10000,
+            SHELL_BATTERY_DETAIL_INTERVAL: 10000,
+
+            DESIGN_CAPACITY: 4500
+        };
+
+        const pluginState = {
+            installed: true,
+            running: true,
+            monitoring: false,
+            updateTimer: null,
+            voltageCurrentTimer: null,
+            batteryTempTimer: null,
+            batteryDetailTimer: null,
+            batteryBootstrapTimer: null,
+            batteryData: {
+                level: 0,
+                status: "Unknown",
+                temperature: null,
+                voltage: 0,
+                current: 0,
+                technology: "Unknown",
+                chargeFull: 0,
+                chargeFullDesign: 0,
+                chargeCounter: 0,
+                cpuTemperature: null
+            }
+        };
+
+        const getElement = (id) => document.getElementById(id);
+        const getUfiValue = (...keys) => {
+            for (const key of keys) {
+                const value = UFI_DATA?.[key];
+                if (value !== undefined && value !== null && String(value).trim() !== "") {
+                    return value;
+                }
+            }
+            return null;
+        };
+        const parseOptionalInt = (...keys) => {
+            const value = getUfiValue(...keys);
+            if (value === null) return null;
+            const parsed = parseInt(value, 10);
+            return Number.isNaN(parsed) ? null : parsed;
+        };
+        const getBatteryStatus = () => {
+            const charging = String(getUfiValue("battery_charging") ?? "").trim();
+            if (charging === "1") return "Charging";
+            if (charging === "0") return "Discharging";
+            return "Unknown";
+        };
+        const isBatteryFull = () => {
+            const charging = String(getUfiValue("battery_charging") ?? "").trim();
+            const current = parseOptionalInt("current_now");
+            return charging === "1" && current !== null && current < 0;
+        };
+
+        const getBatteryColor = (level) => {
+            if (level <= 5) return "#ff5555";
+            if (level <= 10) return "#ff6e6e";
+            if (level <= 15) return "#ff8787";
+            if (level <= 20) return "#ffa0a0";
+            if (level <= 25) return "#ffb9b9";
+            if (level <= 30) return "#ffb86c";
+            if (level <= 35) return "#ffc285";
+            if (level <= 40) return "#ffcc9e";
+            if (level <= 45) return "#ffd6b7";
+            if (level <= 50) return "#ffe0d0";
+            if (level <= 55) return "#e6e05e";
+            if (level <= 60) return "#e9e97a";
+            if (level <= 65) return "#ecec96";
+            if (level <= 70) return "#efefb2";
+            if (level <= 75) return "#8be9fd";
+            if (level <= 80) return "#9aecfd";
+            if (level <= 85) return "#a9effd";
+            if (level <= 90) return "#b8f2fd";
+            if (level <= 95) return "#c7f5fd";
+            return "#50fa7b";
+        };
+
+        const getTemperatureColor = (tempC) => {
+            if (tempC <= 10) return "#00FFFF";
+            if (tempC <= 20) return "#00C78C";
+            if (tempC <= 25) return "#00A86B";
+            if (tempC <= 30) return "#228B22";
+            if (tempC <= 35) return "#9ACD32";
+            if (tempC <= 40) return "#ADFF2F";
+            if (tempC <= 45) return "#FF8C00";
+            if (tempC <= 50) return "#FF4500";
+            if (tempC <= 55) return "#FF6347";
+            return "#DC143C";
+        };
+
+        const getCpuTemperatureColor = (tempC) => {
+            if (tempC < 15) return "#f8f8f2";
+            if (tempC <= 20) return "#50fa7b";
+            if (tempC <= 25) return "#8be9fd";
+            if (tempC <= 30) return "#ffb86c";
+            if (tempC <= 35) return "#ffb86c";
+            if (tempC <= 40) return "#ffb86c";
+            if (tempC <= 45) return "#ff5555";
+            if (tempC <= 50) return "#ff5555";
+            if (tempC <= 55) return "#ff5555";
+            if (tempC <= 60) return "#ff5555";
+            if (tempC <= 65) return "#ff5555";
+            return "#ff0000";
+        };
+        const normalizeCapacityToMah = (value) => {
+            const num = parseInt(value, 10);
+            if (!num) return 0;
+            return num > 100000 ? Math.round(num / 1000) : num;
+        };
+        const getDisplayedCapacity = (battery) => {
+            const level = Math.max(0, Math.min(100, parseInt(battery.level, 10) || 0));
+            const fullMah = normalizeCapacityToMah(battery.chargeFull);
+            const designMah = normalizeCapacityToMah(battery.chargeFullDesign) || fullMah || PLUGIN_CONFIG.DESIGN_CAPACITY;
+            const counterMah = normalizeCapacityToMah(battery.chargeCounter);
+            const maxReference = fullMah || designMah;
+            const estimatedMah = Math.round((maxReference || PLUGIN_CONFIG.DESIGN_CAPACITY) * level / 100);
+            const counterLooksValid =
+                counterMah > 50 &&
+                maxReference > 0 &&
+                counterMah <= Math.round(maxReference * 1.1) &&
+                Math.abs(counterMah - estimatedMah) <= Math.max(300, Math.round(maxReference * 0.2));
+
+            return {
+                currentMah: counterLooksValid ? counterMah : estimatedMah,
+                designMah
+            };
+        };
+
+        const readCpuTemperature = () => {
+            return parseOptionalInt("cpu_temp");
+        };
+        const readBatteryTempByShell = async () => {
+            const paths = PLUGIN_CONFIG.BATTERY_PATHS;
+            const tempRes = await runShellWithRoot(`timeout 2s awk 'NR==1{print; exit}' ${paths.TEMP}`);
+            const text = String(tempRes?.content ?? "").trim();
+
+            pluginState.batteryData.temperature = parseOptionalInt("battery_temp", "temp") ??
+                (() => {
+                    if (!text) return null;
+                    const parsed = parseInt(text, 10);
+                    return Number.isNaN(parsed) ? null : parsed;
+                })();
+
+            updateBatteryDisplay();
+        };
+        const readBatteryDetailsByShell = async () => {
+            const paths = PLUGIN_CONFIG.BATTERY_PATHS;
+            const detailsRes = await runShellWithRoot(
+                `timeout 2s awk 'NR==1{print "TECH=" $0; exit}' ${paths.TECHNOLOGY}; ` +
+                `timeout 2s awk 'NR==1{print "FULL=" $0; exit}' ${paths.CHARGE_FULL}; ` +
+                `timeout 2s awk 'NR==1{print "DESIGN=" $0; exit}' ${paths.CHARGE_FULL_DESIGN}; ` +
+                `timeout 2s awk 'NR==1{print "COUNTER=" $0; exit}' ${paths.CHARGE_COUNTER}`
+            );
+            const lines = String(detailsRes?.content ?? "")
+                .split(/\r?\n/)
+                .map((line) => line.trim())
+                .filter(Boolean);
+            const shellData = {};
+            for (const line of lines) {
+                const index = line.indexOf("=");
+                if (index === -1) continue;
+                shellData[line.slice(0, index)] = line.slice(index + 1).trim();
+            }
+
+            pluginState.batteryData.technology = getUfiValue("battery_technology", "technology") ??
+                shellData.TECH ??
+                "未知";
+
+            pluginState.batteryData.chargeFull = parseInt(
+                getUfiValue("charge_full", "battery_charge_full", "battery_full_capacity") ??
+                shellData.FULL
+            ) || 0;
+
+            pluginState.batteryData.chargeFullDesign = parseInt(
+                getUfiValue("charge_full_design", "battery_charge_full_design", "battery_design_capacity") ??
+                shellData.DESIGN
+            ) || 0;
+
+            pluginState.batteryData.chargeCounter = parseInt(
+                getUfiValue("charge_counter", "battery_charge_counter") ??
+                shellData.COUNTER
+            ) || 0;
+
+            updateBatteryDisplay();
+        };
+        
+        const fetchVoltageCurrentInfo = async () => {
+            const voltage = getUfiValue("voltage_now");
+            const current = getUfiValue("current_now");
+
+            pluginState.batteryData.voltage = parseInt(voltage) || 0;
+            pluginState.batteryData.current = parseInt(current) || 0;
+
+            updateVoltageCurrentDisplay();
+        };
+
+        const fetchBatteryInfo = () => {
+            pluginState.batteryData = {
+                ...pluginState.batteryData,
+                level: parseInt(getUfiValue("battery")) || 0,
+                status: getBatteryStatus(),
+                cpuTemperature: readCpuTemperature()
+            };
+
+            updateBatteryDisplay();
+        };
+
+        const updateVoltageCurrentDisplay = () => {
+            const battery = pluginState.batteryData;
+
+            getElement('battery_voltage').textContent = battery.voltage > 0 ?
+                `${(battery.voltage / 1000000).toFixed(3)}` : "--";
+
+            if (battery.current !== 0) {
+                const currentInMA = battery.current / 1000;
+                getElement('battery_current').textContent = `${currentInMA.toFixed(0)}`;
+            } else if (battery.current === 0) {
+                getElement('battery_current').textContent = "0";
+            } else {
+                getElement('battery_current').textContent = "--";
+            }
+
+            if (battery.voltage !== 0 && battery.current !== 0) {
+                const voltageInV = battery.voltage / 100000;
+                const currentInA = battery.current / 1000000;
+                const power = voltageInV * currentInA * 0.1;
+
+                getElement('battery_power').textContent = `${power.toFixed(2)}`;
+            } else if (battery.voltage === 0 || battery.current === 0) {
+                getElement('battery_power').textContent = "0";
+            } else {
+                getElement('battery_power').textContent = "--";
+            }
+        };
+
+        const updateBatteryDisplay = () => {
+            const battery = pluginState.batteryData;
+            const statusInfo = isBatteryFull()
+                ? { text: "已充满", color: "#8be9fd", icon: "💯" }
+                : (PLUGIN_CONFIG.STATUS_MAP[battery.status] || PLUGIN_CONFIG.STATUS_MAP.Unknown);
+
+            const ring = getElement('battery_ring');
+            const dashoffset = 439.6 * (1 - battery.level / 100);
+            ring.style.strokeDashoffset = dashoffset;
+
+            const ringColor = getBatteryColor(battery.level);
+            ring.style.stroke = ringColor;
+
+            getElement('battery_percent').textContent = `${battery.level}%`;
+            getElement('battery_status').textContent = statusInfo.text;
+            getElement('battery_status').style.fill = statusInfo.color;
+            getElement('battery_icon').textContent = statusInfo.icon;
+
+            const tempElement = getElement('battery_temp');
+            const cpuTempElement = getElement('cpu_temp');
+            if (battery.temperature !== null) {
+                const tempC = (battery.temperature / 10).toFixed(1);
+                tempElement.innerHTML = `${tempC}<span style="color: #5cdbd3;">°C</span>`;
+                tempElement.style.color = getTemperatureColor(parseFloat(tempC));
+            } else {
+                tempElement.textContent = "未知";
+                tempElement.style.color = "#bd93f9";
+            }
+
+            if (battery.cpuTemperature !== null) {
+                const cpuTempC = (battery.cpuTemperature / 1000).toFixed(1);
+                cpuTempElement.innerHTML = `${cpuTempC}<span style="color: #5cdbd3;">°C</span>`;
+                cpuTempElement.style.color = getCpuTemperatureColor(parseFloat(cpuTempC));
+            } else {
+                cpuTempElement.textContent = "未知";
+                cpuTempElement.style.color = "#bd93f9";
+            }
+
+            getElement('battery_tech').textContent = battery.technology;
+
+            const capacityBar = getElement('battery_capacity_bar');
+            const capacityText = getElement('battery_capacity');
+            const { currentMah: currentCapacity, designMah: designCapacity } = getDisplayedCapacity(battery);
+
+            capacityBar.style.width = `${battery.level}%`;
+            capacityText.innerHTML = `${currentCapacity}/${designCapacity} <span style="color: #5cdbd3;">mAh</span>`;
+        };
+
+        const startMonitoring = () => {
+            if (pluginState.monitoring) return;
+            pluginState.monitoring = true;
+
+            const refreshUfiNow = () => {
+                fetchVoltageCurrentInfo();
+                fetchBatteryInfo();
+            };
+            const refreshShellNow = () => {
+                readBatteryTempByShell();
+                readBatteryDetailsByShell();
+            };
+
+            refreshUfiNow();
+            refreshShellNow();
+
+            pluginState.batteryTempTimer = setInterval(
+                readBatteryTempByShell,
+                PLUGIN_CONFIG.SHELL_BATTERY_TEMP_INTERVAL
+            );
+            pluginState.batteryDetailTimer = setInterval(
+                readBatteryDetailsByShell,
+                PLUGIN_CONFIG.SHELL_BATTERY_DETAIL_INTERVAL
+            );
+            pluginState.updateTimer = setInterval(fetchBatteryInfo, PLUGIN_CONFIG.FULL_UPDATE_INTERVAL);
+            pluginState.voltageCurrentTimer = setInterval(
+                fetchVoltageCurrentInfo,
+                PLUGIN_CONFIG.VOLTAGE_CURRENT_UPDATE_INTERVAL
+            );
+
+            pluginState.batteryBootstrapTimer = setInterval(() => {
+                if (!pluginState.monitoring) return;
+                refreshUfiNow();
+                const hasBatteryCoreData =
+                    getUfiValue("battery") !== null &&
+                    getUfiValue("cpu_temp") !== null;
+                if (!hasBatteryCoreData) return;
+                clearInterval(pluginState.batteryBootstrapTimer);
+                pluginState.batteryBootstrapTimer = null;
+            }, 200);
+        };
+        const stopMonitoring = () => {
+            clearInterval(pluginState.updateTimer);
+            clearInterval(pluginState.voltageCurrentTimer);
+            clearInterval(pluginState.batteryTempTimer);
+            clearInterval(pluginState.batteryDetailTimer);
+            clearInterval(pluginState.batteryBootstrapTimer);
+            pluginState.updateTimer = null;
+            pluginState.voltageCurrentTimer = null;
+            pluginState.batteryTempTimer = null;
+            pluginState.batteryDetailTimer = null;
+            pluginState.batteryBootstrapTimer = null;
+            pluginState.monitoring = false;
+        };
+
+        collapseGen("#collapse_battery_btn", "#collapse_battery", "#collapse_battery", (newVal) => {
+            if (newVal === 'close') {
+                stopMonitoring();
+            } else if (pluginState.installed && pluginState.running) {
+                startMonitoring();
+            }
+        });
+
+        if (localStorage.getItem("#collapse_battery") == 'open') {
+            startMonitoring();
+        }
+    })();
+</script>

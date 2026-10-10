@@ -1,0 +1,79 @@
+//<script>
+(() => {
+    const refreshBtn_kano = document.createElement('button')
+    refreshBtn_kano.classList.add('btn')
+    refreshBtn_kano.textContent = "VoLte开关"
+    let status = false
+
+    const checkAdvanceFunc = async () => {
+        const res = await runShellWithRoot('whoami')
+        if (res.content) {
+            if (res.content.includes('root')) {
+                return true
+            }
+        }
+        return false
+    }
+
+    const togglePM = async (flag = false) => {
+        try {
+            if (flag) {
+                await handleAT('AT+CAVIMS=1')
+                const res = await runShellWithRoot('setprop persist.vendor.sys.volte.enable true')
+                if (!res.success) {
+                    throw new Error('设置失败')
+                }
+            }
+            else {
+                await handleAT('AT+CAVIMS=0')
+                const res = await runShellWithRoot('setprop persist.vendor.sys.volte.enable false')
+                if (!res.success) {
+                    throw new Error('设置失败')
+                }
+            }
+        } catch {
+            createToast('切换失败')
+        }
+    }
+
+    const init = async () => {
+        const res = await runShellWithRoot('getprop persist.vendor.sys.volte.enable')
+        if (res.content) {
+            if (res.content.toUpperCase().includes('TRUE')) {
+                status = true
+                refreshBtn_kano.style.backgroundColor = 'var(--dark-btn-color-active)'
+            }
+        }
+    }
+
+    const start = async () => {
+        const canUse = await checkAdvanceFunc()
+        if (!canUse) {
+            createToast('请先打开高级功能')
+            return
+        }
+        if (status) {
+            await togglePM(false)
+            status = false
+            createToast('已永久关闭VoLte！注意,关闭后短信功能会失效')
+            refreshBtn_kano.style.backgroundColor = ''
+        }
+        else {
+            await togglePM(true)
+            status = true
+            refreshBtn_kano.style.backgroundColor = 'var(--dark-btn-color-active)'
+            createToast('已永久开启VoLte！')
+        }
+    }
+
+    refreshBtn_kano.onclick = start
+
+    collapseBtn_menu.nextElementSibling.querySelector('.collapse_box').appendChild(refreshBtn_kano)
+
+    let r = setInterval(() => {
+        if (UFI_DATA.loginfo != "ok") return
+        init()
+        clearInterval(r)
+    }, 300);
+})()
+//</script>

@@ -1,0 +1,202 @@
+<script>
+  (async () => {
+    // 卡片配置
+    const singleCol = true //移动端：true独占一整行 false为标准宽度
+    const cards = [
+      //card是你的卡号 ，verify 是你的手机后四位尾号
+      { card: "你的卡号", verify: "手机尾号", name: "🐋新小鲸" },
+      //{ card: "你的卡号", verify: "手机尾号", name: "🐋新小鲸" },
+      //{ card: "你的卡号", verify: "手机尾号", name: "🐋新小鲸" },
+    ]
+
+    const BASE_HOST = "1.mywuliankj.cn"
+    const BASE_URL = `http://${BASE_HOST}`
+    const LOGIN_URL = `/api/proxy/--${BASE_URL}/app/card/login`
+    const CARD_INFO_URL = `/api/proxy/--${BASE_URL}/app/client/card/get`
+
+    function extractCookie(response) {
+      const rawCookie = response.headers.get('kano-setck')
+        || response.headers.get('set-cookie')
+        || response.headers.get('kano-cookie')
+        || ""
+
+      return rawCookie
+        .split(/,(?=\s*[A-Za-z0-9_\-]+=)/)
+        .map((item) => item.trim().split(';')[0])
+        .filter(Boolean)
+        .join('; ')
+    }
+
+    function getOperatorName(showName = "", fallback = "🐋新小鲸") {
+      if (showName.includes('移动')) return `${fallback}移动`
+      if (showName.includes('联通')) return `${fallback}联通`
+      if (showName.includes('电信')) return `${fallback}电信`
+      return `${fallback}卡`
+    }
+
+    async function loginCard(cardNumber, verify) {
+      const data = new URLSearchParams();
+      data.append('card', cardNumber);
+      data.append('verify', verify);
+
+      const response = await fetch(LOGIN_URL, {
+        method: 'POST',
+        body: data,
+        headers: {
+          Host: BASE_HOST,
+          'User-Agent': "...",
+          'Accept': '*/*',
+          'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Origin': BASE_URL,
+          'Referer': `${BASE_URL}/wap/`
+        },
+        credentials: 'omit'
+      });
+
+      if (!response.ok) throw new Error(await response.text());
+
+      const body = await response.json()
+      if (body?.code !== 0 || !body?.status || !body?.data) {
+        throw new Error(body?.msg || '登录失败')
+      }
+
+      return {
+        loginData: body.data,
+        cookie: extractCookie(response)
+      }
+    }
+
+    async function getCardInfo(cookie) {
+      const headers = {
+        Host: BASE_HOST,
+        'User-Agent': "...",
+        'Accept': '*/*',
+        'content-type': 'application/json;charset=UTF-8',
+        'Referer': `${BASE_URL}/wap/pages/home/home`,
+      }
+
+      if (cookie) {
+        headers['Kano-Cookie'] = cookie
+      }
+
+      const response = await fetch(CARD_INFO_URL, {
+        method: 'GET',
+        headers,
+        credentials: 'omit'
+      });
+
+      if (!response.ok) throw new Error(await response.text());
+
+      const body = await response.json()
+      if (!body?.data) {
+        throw new Error(body?.msg || '卡信息为空')
+      }
+
+      return body.data
+    }
+
+    async function genCard({ card: cardNumber, verify, name = "🐋新小鲸" }) {
+      try {
+        const { loginData, cookie } = await loginCard(cardNumber, verify)
+        const cardInfo = await getCardInfo(cookie)
+
+        const card = {
+          usedData: Number(cardInfo.realUsed || 0),
+          totalData: Number(cardInfo.realUsed || 0) + Number(cardInfo.free || 0),
+          expireDate: cardInfo.expirationTime,
+          op: getOperatorName(loginData.showName || loginData.name || "", name),
+          isDisabled: Boolean(cardInfo.stop || cardInfo.status === 0 || cardInfo.disabled),
+          disabledReason: cardInfo.stop ? "已停机" : (cardInfo.disabledReason || "")
+        };
+
+        const usedData = card.usedData
+        const totalData = card.totalData
+        const op = card.op
+        const expireDate = card.expireDate
+
+        const isDisabled = card.isDisabled
+        const netCard = document.querySelector('.net-card');
+        const el = document.createElement('div')
+        const el_title = document.createElement('div')
+        const mask = document.createElement('div')
+        mask.style.width = "100%"
+        mask.style.height = "100%"
+        mask.style.backgroundColor = "rgba(0,0,0,.5)"
+        mask.style.display = 'flex'
+        mask.style.justifyContent = 'center'
+        mask.style.alignItems = 'center'
+        mask.style.position = 'absolute'
+        mask.style.top = '0'
+        mask.style.left = '0'
+        mask.style.borderRadius = '10px'
+        mask.innerHTML = isDisabled ? card.disabledReason : ""
+        el.style.margin = '4px'
+        singleCol && (el.style.gridColumn = '1/-1')
+        el.style.marginLeft = '0px'
+        el.style.marginRight = '0px'
+        el.style.position = 'relative'
+        el_title.style.position = 'absolute'
+        el_title.style.right = '6px'
+        el_title.style.top = '6px'
+        el.style.width = '200px'
+        el.classList.add('wlk')
+        el.classList.add('statusCard')
+        el.classList.add('net-card')
+        el.style.position = 'relative'
+        el.style.padding = "6px 8px 8px 8px"
+        el.style.fontSize = '.7rem'
+        el.style.boxSizing = 'border-box'
+        el.style.height = '60px'
+        el.onclick = () => {
+          createToast(`${op}卡号:${cardNumber}`)
+        }
+        const used = (Number(usedData) / 1024).toFixed(2)
+        const total = (Number(totalData) / 1024).toFixed(2)
+        const percent = totalData > 0 ? ((Number(used) / Number(total)) * 100).toFixed(2) : "0.00"
+        el.innerHTML = `
+    有效期:${expireDate?.split(' ')[0]}<br/>
+    ${(Number(usedData) / 1024).toFixed(2)}GB/${(Number(totalData) / 1024).toFixed(2)}GB
+    ${kano_parseSignalBar(percent, 0, 100, 90, 60, { g: 'red', o: 'orange', r: 'var(--dark-btn-color-active)' })}
+    `
+        el_title.innerHTML = op
+        el.appendChild(el_title)
+        isDisabled && el.appendChild(mask)
+        netCard?.parentElement?.appendChild(el)
+      } catch (e) {
+        createToast(name + "卡片：" + cardNumber + " 请求失败，" + e.message, 'red')
+      }
+    }
+
+    for (const card of cards) {
+      await genCard(card)
+    }
+  })()
+</script>
+<style>
+  .statusCard {
+    box-sizing: border-box
+  }
+
+  .wlk {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .wlk .signal_bar {
+    width: 100%;
+    margin-top: 0.1rem;
+    box-sizing: border-box;
+  }
+
+  .wlk .signal_bar .text::after {
+    content: " %";
+  }
+
+  @media (max-width: 650px) {
+    .wlk {
+      margin-left: 3px !important;
+      margin-right: 3px !important;
+    }
+  }
+</style>

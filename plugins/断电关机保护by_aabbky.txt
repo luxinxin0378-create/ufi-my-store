@@ -1,0 +1,241 @@
+<!-- [KANO_PLUGIN_START] 断电倒计时关机保护.js -->
+<script>
+(async () => {
+    const PLUGIN_NAME = '断电倒计时关机';
+    const MODAL_ID = 'power_off_timer_modal';
+    const LOG_FILE = '/sdcard/ufi_power_off_log.txt';
+    const CONFIG_FILE = '/sdcard/ufi_power_off_config.txt';
+    
+    // 默认配置
+    let config = {
+        enabled: false,
+        delaySeconds: 60 // 默认60秒
+    };
+
+    let monitorInterval = null;
+    let shutdownTimeout = null;
+    let isCharging = true; // 当前电源状态
+
+    // --- 工具函数 ---
+    const run = async (cmd) => {
+        try {
+            const res = await runShellWithRoot(cmd);
+            return res?.success ? res.content.trim() : null;
+        } catch (e) { return null; }
+    };
+
+    const log = async (msg) => {
+        const time = new Date().toLocaleTimeString();
+        const logEntry = `[${time}] ${msg}`;
+        console.log(logEntry);
+        
+        // 写入文件
+        await run(`echo "${logEntry}" >> ${LOG_FILE}`);
+        
+        // 更新UI
+        const logEl = document.querySelector('#pof_log');
+        if (logEl) {
+            logEl.value += logEntry + '\n';
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+    };
+
+    const clearLog = async () => {
+        await run(`echo "" > ${LOG_FILE}`);
+        const logEl = document.querySelector('#pof_log');
+        if (logEl) logEl.value = '';
+    };
+
+    const readConfig = async () => {
+        const content = await run(`cat ${CONFIG_FILE}`);
+        if (content) {
+            try {
+                const json = JSON.parse(content);
+                config = { ...config, ...json };
+            } catch (e) { console.error('Config parse error', e); }
+        }
+    };
+
+    const saveConfig = async () => {
+        await run(`echo '${JSON.stringify(config)}' > ${CONFIG_FILE}`);
+    };
+
+    // --- 核心逻辑 ---
+    const checkPowerStatus = async () => {
+        // 尝试获取电池状态，如果包含 Charging 或 Full 则认为在充电
+        const status = await run('cat /sys/class/power_supply/battery/status 2>/dev/null');
+        const charging = status && (status.includes('Charging') || status.includes('Full'));
+        
+        // 如果无法读取系统节点，尝试通过 UFI_DATA (如果环境支持)
+        const isChargingFallback = String(UFI_DATA?.battery_charging) === '1';
+        const currentlyCharging = charging !== null ? charging : isChargingFallback;
+
+        if (currentlyCharging !== isCharging) {
+            isCharging = currentlyCharging;
+            if (isCharging) {
+                // 电源连接
+                handlePowerConnected();
+            } else {
+                // 电源断开
+                handlePowerDisconnected();
+            }
+        }
+    };
+
+    const handlePowerConnected = async () => {
+        await log('⚡ 电源已连接 - 停止倒计时');
+        if (shutdownTimeout) {
+            clearTimeout(shutdownTimeout);
+            shutdownTimeout = null;
+        }
+        updateStatusUI('已连接电源', 'green');
+        await clearLog(); // 需求：每次连接清空日志
+        await log('🧹 日志已清空');
+    };
+
+    const handlePowerDisconnected = async () => {
+        if (!config.enabled) return;
+        
+        await log(`🔋 电源已断开 - 将在 ${config.delaySeconds} 秒后关机`);
+        updateStatusUI(`倒计时中: ${config.delaySeconds}s`, 'orange');
+
+        if (shutdownTimeout) clearTimeout(shutdownTimeout);
+        
+        shutdownTimeout = setTimeout(async () => {
+            await log('🛑 时间到，正在执行关机...');
+            await run('reboot -p'); // 关机命令
+            updateStatusUI('已关机', 'red');
+        }, config.delaySeconds * 1000);
+    };
+
+    const startMonitoring = () => {
+        if (monitorInterval) return;
+        checkPowerStatus(); // 立即检查一次
+        monitorInterval = setInterval(checkPowerStatus, 2000); // 每2秒检查一次
+    };
+
+    const stopMonitoring = () => {
+        if (monitorInterval) clearInterval(monitorInterval);
+        monitorInterval = null;
+        if (shutdownTimeout) {
+            clearTimeout(shutdownTimeout);
+            shutdownTimeout = null;
+        }
+    };
+
+    // --- UI 交互 ---
+    const updateStatusUI = (text, color) => {
+        const el = document.querySelector('#pof_status');
+        if (el) {
+            el.textContent = text;
+            el.style.color = color;
+        }
+    };
+
+    const renderModal = () => {
+        if (document.getElementById(MODAL_ID)) return;
+
+        const html = `
+        <div id="${MODAL_ID}" class="modal" style="max-width:400px; padding:20px; border-radius:12px; background:var(--dark-card-bg); position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:9999; box-shadow:0 0 20px rgba(0,0,0,0.5);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0;">${PLUGIN_NAME}</h3>
+                <button onclick="document.getElementById('${MODAL_ID}').remove()" style="background:none; border:none; color:#fff; font-size:1.2rem;">×</button>
+            </div>
+            
+            <div style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+                <span>启用插件</span>
+                <label class="switch">
+                    <input type="checkbox" id="pof_switch">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div style="margin-bottom:15px;">
+                <label>断电倒计时 (秒): <span id="pof_val_display">${config.delaySeconds}</span>s</label>
+                <input type="range" id="pof_range" min="30" max="3600" step="30" value="${config.delaySeconds}" style="width:100%">
+                <div style="font-size:0.8rem; opacity:0.7; margin-top:5px;">范围: 30s - 3600s</div>
+            </div>
+
+            <div style="margin-bottom:15px; font-size:0.9rem;">
+                状态: <span id="pof_status" style="color:#888">未运行</span>
+            </div>
+
+            <div style="margin-bottom:10px; display:flex; gap:10px;">
+                <button id="pof_save_btn" style="flex:1; padding:8px; background:var(--dark-btn-color-active); border:none; border-radius:4px; color:#fff;">保存设置</button>
+                <button id="pof_clear_log_btn" style="padding:8px; background:#ff4757; border:none; border-radius:4px; color:#fff;">清空日志</button>
+            </div>
+
+            <textarea id="pof_log" readonly style="width:100%; height:150px; background:rgba(0,0,0,0.3); border:1px solid #444; color:#0f0; padding:10px; font-family:monospace; font-size:0.8rem; resize:none;"></textarea>
+        </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', html);
+        
+        // 绑定事件
+        const switchEl = document.querySelector('#pof_switch');
+        const rangeEl = document.querySelector('#pof_range');
+        const valDisplay = document.querySelector('#pof_val_display');
+        
+        switchEl.checked = config.enabled;
+        
+        switchEl.onchange = (e) => {
+            config.enabled = e.target.checked;
+            saveConfig();
+            if (config.enabled) {
+                startMonitoring();
+                log('✅ 插件已启用');
+            } else {
+                stopMonitoring();
+                log('❌ 插件已禁用');
+            }
+        };
+
+        rangeEl.oninput = (e) => {
+            valDisplay.textContent = e.target.value;
+        };
+
+        rangeEl.onchange = (e) => {
+            config.delaySeconds = parseInt(e.target.value);
+            saveConfig();
+        };
+
+        document.querySelector('#pof_save_btn').onclick = async () => {
+            await saveConfig();
+            createToast('设置已保存', 'green');
+        };
+
+        document.querySelector('#pof_clear_log_btn').onclick = async () => {
+            await clearLog();
+            createToast('日志已清空', 'green');
+        };
+
+        // 初始化状态
+        if (config.enabled) {
+            startMonitoring();
+            updateStatusUI(isCharging ? '监控中 (电源连接)' : '监控中 (电源断开)', 'green');
+        }
+    };
+
+    // --- 初始化 ---
+    await readConfig();
+    
+    // 读取历史日志
+    const historyLog = await run(`cat ${LOG_FILE}`);
+    
+    // 添加按钮到界面
+    const btn = document.createElement('button');
+    btn.textContent = PLUGIN_NAME;
+    btn.onclick = () => {
+        renderModal();
+        // 延迟一点填充日志，确保DOM渲染完成
+        setTimeout(() => {
+            const logEl = document.querySelector('#pof_log');
+            if (logEl && historyLog) logEl.value = historyLog;
+        }, 100);
+    };
+    
+    document.querySelector('.actions-buttons')?.appendChild(btn);
+
+})();
+</script>
+<!-- [KANO_PLUGIN_END] 断电倒计时关机保护.js -->

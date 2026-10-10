@@ -1,0 +1,23 @@
+<script>
+    (() => {
+        const menuBox = collapseBtn_menu.nextElementSibling.querySelector('.collapse_box')
+
+        const btnWirelessAdb = document.createElement('button')
+        btnWirelessAdb.textContent = "肥猫无线ADB"
+        menuBox.appendChild(btnWirelessAdb)
+
+        btnWirelessAdb.onclick = async () => {
+            try {
+                createToast("正在开启无线 ADB...", "")
+                await runShellWithRoot("setprop service.adb.tcp.port 5555")
+                await runShellWithRoot("setprop persist.adb.tcp.port 5555")
+                await runShellWithRoot("setprop persist.service.adb.enable 1")
+                await runShellWithRoot("setprop ctl.restart adbd")
+                createToast(`✅ 无线ADB已开启：adb connect ip:5555`, "green")
+            } catch (e) {
+                console.error(e)
+                createToast("执行失败，可能无高级功能", "red")
+            }
+        }
+    })();
+</script>
