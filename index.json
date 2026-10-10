@@ -6,6 +6,293 @@
     "data": {
       "content": [
         {
+          "name": "【插件】樱花映射SakuraFrp插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 38113,
+          "is_dir": false
+        },
+        {
+          "name": "【插件】WiFi轻度关闭断联拉回插件_v2.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 32645,
+          "is_dir": false
+        },
+        {
+          "name": "【电源联动指示灯】设备端常驻版@Lino.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 22614,
+          "is_dir": false
+        },
+        {
+          "name": "【动态壁纸插件】自定义背景视频.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 18683,
+          "is_dir": false
+        },
+        {
+          "name": "【非随身WiFi必备】修复插件BUG_beta2.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 3033,
+          "is_dir": false
+        },
+        {
+          "name": "【私人云音乐平台】Navidrome.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 16172,
+          "is_dir": false
+        },
+        {
+          "name": "【小龙虾】PicoClaw_皮皮虾，我们走！.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 38277,
+          "is_dir": false
+        },
+        {
+          "name": "【新版U20】 开启USB与无线局域网共享.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 9967,
+          "is_dir": false
+        },
+        {
+          "name": "【新客户端】npc内网穿透客户端插件1.3.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 11364,
+          "is_dir": false
+        },
+        {
+          "name": "【支持pro系列】一键Root工具箱_在线版.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 29774,
+          "is_dir": false
+        },
+        {
+          "name": "【支持usb共享、热点自启动】热点管理插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 47008,
+          "is_dir": false
+        },
+        {
+          "name": "【ufi插件】更新3月25日版本后高级功能打不开临时修复.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 671,
+          "is_dir": false
+        },
+        {
+          "name": "【verified】流量卡片4.0：支持多种号卡（欢喜猴）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 105335,
+          "is_dir": false
+        },
+        {
+          "name": "按键图标插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 75829,
+          "is_dir": false
+        },
+        {
+          "name": "百度一下1.2.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 7769,
+          "is_dir": false
+        },
+        {
+          "name": "本机访问IP查询.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 11747,
+          "is_dir": false
+        },
+        {
+          "name": "沧海流量卡片.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 6428,
+          "is_dir": false
+        },
+        {
+          "name": "插件综合收纳箱(跨端同步版)v9.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 79005,
+          "is_dir": false
+        },
+        {
+          "name": "充电控制器-老头乐（直供电插件）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 19341,
+          "is_dir": false
+        },
+        {
+          "name": "充电控制器（直供电插件）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 17911,
+          "is_dir": false
+        },
+        {
+          "name": "打电话测试插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 4592,
+          "is_dir": false
+        },
+        {
+          "name": "低电量管理_0.8.2.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 37463,
+          "is_dir": false
+        },
+        {
+          "name": "点击”功能列表“标题切换按钮可见性1.1(请放在插件最后).js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 5646,
+          "is_dir": false
+        },
+        {
+          "name": "电池监控v6(渐变色)20261010@随风.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 34074,
+          "is_dir": false
+        },
+        {
+          "name": "飞猫分身切卡插件「非飞猫分身卡不要装，会锁卡！！！！」.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 4100,
+          "is_dir": false
+        },
+        {
+          "name": "飞猫卡切网器(新版).js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 5066,
+          "is_dir": false
+        },
+        {
+          "name": "飞猫U20灯光控制@爪爪噗.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 40764,
+          "is_dir": false
+        },
+        {
+          "name": "肥猫emmc检测@爪爪噗.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 21701,
+          "is_dir": false
+        },
+        {
+          "name": "分区管理插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 36085,
+          "is_dir": false
+        },
+        {
+          "name": "高级一键去温控限速(开机自启).js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 6226,
+          "is_dir": false
+        },
+        {
+          "name": "更改ufi-tools为80端口插件1.1(需要高级功能).js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 4724,
+          "is_dir": false
+        },
+        {
+          "name": "官方后台密码自动填充.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 393,
+          "is_dir": false
+        },
+        {
+          "name": "季节氛围插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 84393,
+          "is_dir": false
+        },
+        {
+          "name": "进程管理器.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 21018,
+          "is_dir": false
+        },
+        {
+          "name": "开机第一屏LOGO自定义插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 40210,
+          "is_dir": false
+        },
+        {
+          "name": "开机自动解锁PIN(多卡版)_AI生成.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 12046,
+          "is_dir": false
+        },
+        {
+          "name": "老头乐播放自定义音频.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 6834,
+          "is_dir": false
+        },
+        {
+          "name": "老头乐一键切卡(UFIV1.1.38以上可用).js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 2139,
+          "is_dir": false
+        },
+        {
+          "name": "老头乐远程语音音频播放.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 26704,
+          "is_dir": false
+        },
+        {
+          "name": "流量卡片4.1：支持多种号卡（欢喜猴）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 111219,
+          "is_dir": false
+        },
+        {
+          "name": "流量卡片4.1扁平版（欢喜猴）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 94607,
+          "is_dir": false
+        },
+        {
           "name": "猫猫_TProxy_1.3.js",
           "modified": "2026-10-10T00:00:00+08:00",
           "hash_info": {},
@@ -17,6 +304,608 @@
           "modified": "2026-10-10T00:00:00+08:00",
           "hash_info": {},
           "size": 78368,
+          "is_dir": false
+        },
+        {
+          "name": "欧本流量后台卡片02（@欢喜猴）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 20600,
+          "is_dir": false
+        },
+        {
+          "name": "企业微信应用短信转发.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 34193,
+          "is_dir": false
+        },
+        {
+          "name": "强力软重启2.0：扩展坞可用（欢喜猴）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 29456,
+          "is_dir": false
+        },
+        {
+          "name": "青龙面板1.1.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 11911,
+          "is_dir": false
+        },
+        {
+          "name": "去温控限速(定制版_不影响二次认证).js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 5421,
+          "is_dir": false
+        },
+        {
+          "name": "上行限速器_v2.0.4.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 64417,
+          "is_dir": false
+        },
+        {
+          "name": "设备监测报警消息推送v2.0.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 148808,
+          "is_dir": false
+        },
+        {
+          "name": "设备流量监控插件(钴雮) .js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 230189,
+          "is_dir": false
+        },
+        {
+          "name": "设备流量监控插件v22.0.12.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 488810,
+          "is_dir": false
+        },
+        {
+          "name": "神秘的插件1.2.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 17091,
+          "is_dir": false
+        },
+        {
+          "name": "数据重置插件(重置官方后台或高级后台数据).js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 4340,
+          "is_dir": false
+        },
+        {
+          "name": "网络检测助手插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 35581,
+          "is_dir": false
+        },
+        {
+          "name": "网络限速器高级版.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 14335,
+          "is_dir": false
+        },
+        {
+          "name": "网络质量检测ping插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 21326,
+          "is_dir": false
+        },
+        {
+          "name": "网页对讲机.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 37869,
+          "is_dir": false
+        },
+        {
+          "name": "温度内存监管2.0：点击能量球可触发降温清理（欢喜猴）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 54627,
+          "is_dir": false
+        },
+        {
+          "name": "温控编辑器.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 49406,
+          "is_dir": false
+        },
+        {
+          "name": "温控指示灯1.5(V50请编辑插件).js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 8643,
+          "is_dir": false
+        },
+        {
+          "name": "无线ADB局域网访问限制插件，防室友防朋友防同事专用.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 7486,
+          "is_dir": false
+        },
+        {
+          "name": "小鲸流量卡片（需要3.0以上版本）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 5483,
+          "is_dir": false
+        },
+        {
+          "name": "信号面板1.1：新增加速功能（欢喜猴）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 82203,
+          "is_dir": false
+        },
+        {
+          "name": "星狐物联流量卡片（需要3.1.5以上版本）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 8123,
+          "is_dir": false
+        },
+        {
+          "name": "修复插件网页在非局域网下不显示.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 3033,
+          "is_dir": false
+        },
+        {
+          "name": "烨霖流量卡片（需要3.0以上版本）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 5339,
+          "is_dir": false
+        },
+        {
+          "name": "一键串改许可插件【支持f50、u30和pro系列、v50、畅行系列、远航系列等】.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 479825,
+          "is_dir": false
+        },
+        {
+          "name": "一键改串插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 8375,
+          "is_dir": false
+        },
+        {
+          "name": "一键清理内存.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 15259,
+          "is_dir": false
+        },
+        {
+          "name": "以太网与USB网络共享守护(中兴随身请勿使用).js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 114182,
+          "is_dir": false
+        },
+        {
+          "name": "应用开机自启管理.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 47291,
+          "is_dir": false
+        },
+        {
+          "name": "硬件转发开关（可以解决网页打不开、TUN无法使用问题）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 2305,
+          "is_dir": false
+        },
+        {
+          "name": "云上流量卡片（需要3.0以上版本）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 5483,
+          "is_dir": false
+        },
+        {
+          "name": "中兴后台默认密码获取插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 11631,
+          "is_dir": false
+        },
+        {
+          "name": "字母哥流量卡片（需要3.1.5以上版本）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 7996,
+          "is_dir": false
+        },
+        {
+          "name": "自定义DNS.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 10177,
+          "is_dir": false
+        },
+        {
+          "name": "自定义hosts.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 6038,
+          "is_dir": false
+        },
+        {
+          "name": "ADB小工具 AI生成.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 6590,
+          "is_dir": false
+        },
+        {
+          "name": "ADB音频透传插件_beta4.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 38706,
+          "is_dir": false
+        },
+        {
+          "name": "ADGuardHome插件2.0.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 28695,
+          "is_dir": false
+        },
+        {
+          "name": "ADGuardHome插件2.4.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 36060,
+          "is_dir": false
+        },
+        {
+          "name": "AI大屏数据看板插件1.1.2.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 32047,
+          "is_dir": false
+        },
+        {
+          "name": "Aria2插件2.0.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 10508,
+          "is_dir": false
+        },
+        {
+          "name": "CloudFlare_Tunnel内网穿透插件优化版.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 34198,
+          "is_dir": false
+        },
+        {
+          "name": "Cpolar内网穿透.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 21809,
+          "is_dir": false
+        },
+        {
+          "name": "CPU高级性能调节器1.8.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 28422,
+          "is_dir": false
+        },
+        {
+          "name": "crontab定时任务插件1.3.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 26341,
+          "is_dir": false
+        },
+        {
+          "name": "DDNS-GO插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 3012,
+          "is_dir": false
+        },
+        {
+          "name": "DDNS-GO美化版.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 12197,
+          "is_dir": false
+        },
+        {
+          "name": "EasyConnect_VPN.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 13567,
+          "is_dir": false
+        },
+        {
+          "name": "EasyTier组网插件1.4.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 16688,
+          "is_dir": false
+        },
+        {
+          "name": "F50控制蓝牙音量切歌显示歌名.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 21828,
+          "is_dir": false
+        },
+        {
+          "name": "F50Pro外置卡切换补全.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 413,
+          "is_dir": false
+        },
+        {
+          "name": "frpc插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 10206,
+          "is_dir": false
+        },
+        {
+          "name": "frpc内网穿透插件1.3.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 11163,
+          "is_dir": false
+        },
+        {
+          "name": "hp-lite内网穿透客户端插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 14449,
+          "is_dir": false
+        },
+        {
+          "name": "IPv6设置.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 6945,
+          "is_dir": false
+        },
+        {
+          "name": "Lucky插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 2831,
+          "is_dir": false
+        },
+        {
+          "name": "Lucky插件1.0美化版.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 15028,
+          "is_dir": false
+        },
+        {
+          "name": "Magisk管理器(通用版).js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 51255,
+          "is_dir": false
+        },
+        {
+          "name": "Magisk管理器1.0.4.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 96344,
+          "is_dir": false
+        },
+        {
+          "name": "Magisk模块守护进程1.2@爪爪噗.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 34658,
+          "is_dir": false
+        },
+        {
+          "name": "Magisk模块在线商店.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 12911,
+          "is_dir": false
+        },
+        {
+          "name": "miniUPnP插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 13308,
+          "is_dir": false
+        },
+        {
+          "name": "Mosdns插件1.2.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 115677,
+          "is_dir": false
+        },
+        {
+          "name": "npc内网穿透客户端插件1.3.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 11360,
+          "is_dir": false
+        },
+        {
+          "name": "Open Clash美化1.01.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 69814,
+          "is_dir": false
+        },
+        {
+          "name": "OpenList插件(by+minikano).js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 17169,
+          "is_dir": false
+        },
+        {
+          "name": "Pro系列开机自启双卡双待.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 2930,
+          "is_dir": false
+        },
+        {
+          "name": "qBittorrent插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 29241,
+          "is_dir": false
+        },
+        {
+          "name": "RSI仪表流量-酒精.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 45658,
+          "is_dir": false
+        },
+        {
+          "name": "SQLite管理与进程Killer.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 17389,
+          "is_dir": false
+        },
+        {
+          "name": "U30 U20 F50 温控指示灯1.4.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 8421,
+          "is_dir": false
+        },
+        {
+          "name": "U30全球频段列表补齐1.1.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 2190,
+          "is_dir": false
+        },
+        {
+          "name": "U30Pro高级桌面.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 47459,
+          "is_dir": false
+        },
+        {
+          "name": "U30Pro洛天依主题插件.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 13220,
+          "is_dir": false
+        },
+        {
+          "name": "UFI HTTPS反向代理.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 21995,
+          "is_dir": false
+        },
+        {
+          "name": "usb共享网络隔离修复（解决usb、ecm网络共享和WiFi客户端之间不互通问题）.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 2927,
+          "is_dir": false
+        },
+        {
+          "name": "USB网络模式切换插件-中兴版.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 19022,
+          "is_dir": false
+        },
+        {
+          "name": "USB网络模式切换插件1.2.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 28970,
+          "is_dir": false
+        },
+        {
+          "name": "USB与转网口模式切换助手_by_kano.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 23690,
+          "is_dir": false
+        },
+        {
+          "name": "V50温控指示灯1.5.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 8724,
+          "is_dir": false
+        },
+        {
+          "name": "WiFi接入设备控制_v1.5.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 125153,
+          "is_dir": false
+        },
+        {
+          "name": "WiFi开关.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 2343,
+          "is_dir": false
+        },
+        {
+          "name": "WIFI信道+隐藏SSID+热点超时自定义插件V3_和面具模块配合使用.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 15176,
+          "is_dir": false
+        },
+        {
+          "name": "WIFI信道切换插件_和面具模块配合使用.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 5390,
+          "is_dir": false
+        },
+        {
+          "name": "ws_scrcpy网页投屏插件1.3(by+minikano).js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 23131,
+          "is_dir": false
+        },
+        {
+          "name": "ws_scrcpy网页投屏插件1.4(by+minikano).js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 23133,
           "is_dir": false
         }
       ]
