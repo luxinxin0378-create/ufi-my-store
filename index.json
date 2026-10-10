@@ -4,7 +4,22 @@
     "code": 200,
     "message": "success",
     "data": {
-      "content": []
+      "content": [
+        {
+          "name": "猫猫_TProxy_1.3.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 32832,
+          "is_dir": false
+        },
+        {
+          "name": "猫猫配置可视化编辑器2.0.js",
+          "modified": "2026-10-10T00:00:00+08:00",
+          "hash_info": {},
+          "size": 78368,
+          "is_dir": false
+        }
+      ]
     }
   }
 }
