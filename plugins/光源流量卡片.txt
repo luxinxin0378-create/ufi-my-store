@@ -1,0 +1,305 @@
+<script>
+    (() => {
+        const phone = localStorage.getItem('guangyuan_phone');
+        const pwd = localStorage.getItem('guangyuan_pwd');
+        const cardNumber = localStorage.getItem('guangyuan_cardNumber');
+        const nickName = localStorage.getItem('guangyuan_nickName');
+
+        const crateMd = (phone = '', pwd = '', cardNumber = '', nickName = '') => {
+            const modal = createModal({
+                name: "guangyuan",
+                isMask: false,
+                title: "光源卡片-初始化",
+                contentStyle: "font-size:12px",
+                confirmBtnText: t('submit_btn'),
+                closeBtnText: t('close_btn'),
+                onClose: () => {
+                    return true
+                },
+                onConfirm: () => {
+                    window.location.reload();
+                    //存储
+                    init(modal);
+                    return true;
+                },
+                content: `
+                <div class="item" style="margin: 10px auto;">
+                    <label style="display: flex; align-items: center;">
+                        <span style="flex: 1;">手机</span>
+                        <input value="${phone}" style="flex: 1;padding: 4px 6px;width: 100%;" name="phone" type="text" placeholder="手机号" class="blur-px">
+                    </label>
+                </div>
+                <div class="item" style="margin: 10px auto;">
+                    <label style="display: flex; align-items: center;">
+                        <span style="flex: 1;">密码</span>
+                        <input value="${pwd}" style="flex: 1;padding: 4px 6px;width: 100%;" name="pwd" type="password" placeholder="密码" class="blur-px">
+                    </label>
+                </div>
+                <div class="item" style="margin: 10px auto;">
+                    <label style="display: flex; align-items: center;">
+                        <span style="flex: 1;">卡号</span>
+                        <input value="${cardNumber}" style="flex: 1;padding: 4px 6px;width: 100%;" name="card" type="text" placeholder="要查询的卡号" class="blur-px">
+                    </label>
+                </div>
+                <div class="item" style="margin: 10px auto;">
+                    <label style="display: flex; align-items: center;">
+                        <span style="flex: 1;">昵称</span>
+                        <input value="${nickName}" style="flex: 1;padding: 4px 6px;width: 100%;" name="nickName" type="text" placeholder="要展示的昵称" class="blur-px">
+                    </label>
+                </div>
+            `
+            })
+            return modal;
+        }
+
+        const checkStorage = () => {
+            if (phone && pwd && cardNumber) {
+                return true;
+            }
+            return false;
+        }
+        if (!checkStorage()) {
+            const md = crateMd(phone || '', pwd || '', cardNumber || '', nickName || '');
+            showModal(md.id)
+        };
+
+        const init = (md) => {
+            //卡片配置
+            const singleCol = false //移动端：true独占一整行 false为标准宽度
+            let phone = null;
+            let pwd = null;
+            let cardNumber = null;
+            let nickName = null;
+
+            //获取输入框的值
+            if (md && md.el) {
+                phone = md.el.querySelector('input[name="phone"]').value.trim();
+                pwd = md.el.querySelector('input[name="pwd"]').value.trim();
+                cardNumber = md.el.querySelector('input[name="card"]').value.trim();
+                nickName = md.el.querySelector('input[name="nickName"]').value.trim();
+                if (!phone) {
+                    createToast('请输入手机号', 'red');
+                    return false;
+                }
+                if (!pwd) {
+                    createToast('请输入密码', 'red');
+                    return false;
+                }
+                if (!cardNumber) {
+                    createToast('请输入卡号', 'red');
+                    return false;
+                }
+            } else {
+                //尝试从本地存储获取
+                const storedPhone = localStorage.getItem('guangyuan_phone');
+                const storedPwd = localStorage.getItem('guangyuan_pwd');
+                const storedCardNumber = localStorage.getItem('guangyuan_cardNumber');
+                const storedNickName = localStorage.getItem('guangyuan_nickName');
+                // 任意一项没有就报错
+                if (storedPhone && storedPwd && storedCardNumber) {
+                    phone = storedPhone;
+                    pwd = storedPwd;
+                    cardNumber = storedCardNumber;
+                    nickName = storedNickName;
+                } else {
+                    createToast('请先初始化光源卡片', 'red');
+                    const md = crateMd(phone || '', pwd || '', cardNumber || '', nickName || '');
+                    showModal(md.id)
+                    return false;
+                }
+            }
+
+
+            //保存到本地存储
+            localStorage.setItem('guangyuan_phone', phone);
+            localStorage.setItem('guangyuan_pwd', pwd);
+            localStorage.setItem('guangyuan_cardNumber', cardNumber);
+            localStorage.setItem('guangyuan_nickName', nickName);
+
+            setTimeout(() => {
+                genCard(cardNumber, nickName)
+            }, 100);
+
+            // 下面的不要动
+            const AES_KEY = CryptoJS.enc.Utf8.parse('5TGB&YHN7UJM(IK<');
+            const BASE_URL = '/api/proxy/--https://w.chengtakj.com/api';
+            const HEADERS = {
+                'Content-Type': 'application/json',
+                "user-agent": "Mozilla/5.0 (Linux; Android 14; PHB110 Build/TP1A.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/143.0.7499.34 Mobile Safari/537.36 uni-app Html5Plus/1.0",
+                "host": "w.chengtakj.com",
+                "platform": "app",
+                "App-Agent": "wulian v1.3.6 prod 101cc90492c060d9438ba5962406d9ea"
+            }
+
+            const GYAES = {
+                encrypt(data) {
+                    return CryptoJS.AES.encrypt(
+                        JSON.stringify(data),
+                        AES_KEY,
+                        {
+                            mode: CryptoJS.mode.ECB,
+                            padding: CryptoJS.pad.Pkcs7,
+                        }
+                    ).toString();
+                },
+                decrypt(cipherText) {
+                    const bytes = CryptoJS.AES.decrypt(
+                        cipherText,
+                        AES_KEY,
+                        {
+                            mode: CryptoJS.mode.ECB,
+                            padding: CryptoJS.pad.Pkcs7,
+                        }
+                    );
+
+                    const text = CryptoJS.enc.Utf8.stringify(bytes);
+                    if (!text) return text;
+
+                    try {
+                        return JSON.parse(text);
+                    } catch {
+                        return text;
+                    }
+                },
+            };
+
+
+            async function login() {
+                const res = await fetch(BASE_URL + '/auth/app/pwdLogin', {
+                    method: 'POST',
+                    headers: HEADERS,
+                    body: GYAES.encrypt({
+                        phone,
+                        pwd,
+                    }),
+                });
+                const data = await res.json();
+                if (data.code !== 200) {
+                    throw new Error('登录失败：' + data.message);
+                }
+                return data.data.access_token;
+            };
+
+            async function queryCard(token, cardNumber) {
+                const res = await fetch(BASE_URL + '/wapp/config/init/card/info?viewCardNumber=' + cardNumber, {
+                    method: 'GET',
+                    headers: {
+                        ...HEADERS,
+                        "kano-authorization": `Bearer ${token}`,
+                    }
+                });
+                const data = await res.json();
+                if (data.code !== 200) {
+                    throw new Error('查询流量卡失败：' + data.message);
+                }
+                return data;
+            };
+
+            async function genCard(cardNumber, name = "光源") {
+                try {
+                    const token = await login()
+                    queryCard(token, cardNumber)
+                        .then((data) => {
+                            if (!data.data) {
+                                createToast(name + data.msg, 'red')
+                            }
+                            console.log('流量卡信息:', data.data);
+                            const card = data.data;
+                            const usedData = card?.flowSum - card?.flowSurplus
+                            const totalData = card?.flowSum
+                            const isDisabled = JSON.stringify(card).includes('注销')
+                            const isStop = JSON.stringify(card).includes('停机')
+                            const netCard = document.querySelector('.net-card');
+                            const el = document.createElement('div')
+                            const el_title = document.createElement('div')
+                            const mask = document.createElement('div')
+                            mask.style.width = "100%"
+                            mask.style.height = "100%"
+                            mask.style.backgroundColor = "rgba(0,0,0,.5)"
+                            mask.style.display = 'flex'
+                            mask.style.justifyContent = 'center'
+                            mask.style.alignItems = 'center'
+                            mask.style.position = 'absolute'
+                            mask.style.top = '0'
+                            mask.style.left = '0'
+                            mask.style.borderRadius = '10px'
+                            mask.innerHTML = isDisabled ? "已注销" : isStop ? "已停机" : ""
+                            el.style.margin = '4px'
+                            singleCol && (el.style.gridColumn = '1/-1')
+                            el.style.marginLeft = '0px'
+                            el.style.marginRight = '0px'
+                            el.style.position = 'relative'
+                            el_title.style.position = 'absolute'
+                            el_title.style.right = '6px'
+                            el_title.style.top = '6px'
+                            el.style.width = '200px'
+                            el.classList.add('wlk')
+                            el.classList.add('statusCard')
+                            el.classList.add('net-card')
+                            el.style.position = 'relative'
+                            el.style.padding = "6px 8px 8px 8px"
+                            el.style.fontSize = '.7rem'
+                            el.style.boxSizing = 'border-box'
+                            el.style.height = '60px'
+                            el.onclick = () => {
+                                const md = crateMd(phone || '', pwd || '', cardNumber || '', nickName || '');
+                                showModal(md.id)
+                            }
+                            const used = (Number(usedData) / 1024).toFixed(2)
+                            const total = (Number(totalData) / 1024).toFixed(2)
+                            el.innerHTML = `
+    已使用 / 总流量 <br>
+    ${(Number(usedData) / 1024).toFixed(2)}GB/${(Number(totalData) / 1024).toFixed(2)}GB
+    ${kano_parseSignalBar(((used / total) * 100).toFixed(2), 0, 100, 90, 60, { g: 'red', o: 'orange', r: 'var(--dark-btn-color-active)' })}
+    `
+                            el_title.innerHTML = `光源-${name}`
+                            el.appendChild(el_title)
+                            isDisabled && el.appendChild(mask)
+                            netCard?.parentElement?.appendChild(el)
+                        })
+
+                }
+                catch (e) {
+                    createToast("光源物联卡片-网络异常:" + cardNumber, 'red')
+                    console.error(e)
+                    //清除本地存储
+                    localStorage.removeItem('guangyuan_phone');
+                    localStorage.removeItem('guangyuan_pwd');
+                    localStorage.removeItem('guangyuan_cardNumber');
+                    localStorage.removeItem('guangyuan_nickName');
+                }
+            }
+            return true
+        }
+
+        init()
+    })()
+</script>
+<style>
+    .statusCard {
+        box-sizing: border-box
+    }
+
+    .wlk {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .wlk .signal_bar {
+        width: 100%;
+        margin-top: 0.1rem;
+        box-sizing: border-box;
+    }
+
+    .wlk .signal_bar .text::after {
+        content: " %";
+    }
+
+    @media (max-width: 650px) {
+        .wlk {
+            margin-left: 3px !important;
+            margin-right: 3px !important;
+        }
+    }
+</style>

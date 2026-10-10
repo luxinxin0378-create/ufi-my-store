@@ -1,0 +1,308 @@
+<script>
+(() => {
+    // 等待页面加载完成
+    const initSpeedTestPlugin = () => {
+        // 1. 找到挂载点
+        const container = document.querySelector('.functions-container');
+        if (!container) {
+            console.error('找不到 .functions-container 元素');
+            setTimeout(initSpeedTestPlugin, 1000);
+            return;
+        }
+
+        // 2. 检查是否已经存在插件
+        if (document.getElementById('network-speedtest-plugin')) {
+            console.log('网络测速插件已存在');
+            return;
+        }
+
+        // 3. 创建插件HTML结构
+        const pluginHTML = `
+<div id="network-speedtest-plugin" style="width: 100%; margin-top: 10px;">
+    <div class="title" style="margin: 6px 0; color: #fff; display: flex; align-items: center; gap: 15px;">
+        <strong style="color:#fff; font-size: 16px;">🌐 网络测速</strong>
+        <div style="display: inline-block;" id="network_speedtest_collapse_btn"></div>
+    </div>
+    <div class="collapse" id="network_speedtest_collapse" data-name="close" style="transition:all 0.1s;height:0;overflow:hidden;">
+        <div class="collapse_box" style="padding: 15px;">
+            <!-- 说明区域 -->
+            <div style="margin-bottom: 25px; padding: 18px; background: linear-gradient(135deg, rgba(33,150,243,0.2), rgba(33,150,243,0.1)); border-radius: 16px; border: 1px solid rgba(33,150,243,0.3); position: relative; overflow: hidden;">
+                <div style="position: absolute; top: -50px; right: -50px; width: 100px; height: 100px; background: rgba(33,150,243,0.1); border-radius: 50%; z-index: 0;"></div>
+                <div style="position: relative; z-index: 1;">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+                        <div style="width: 28px; height: 28px; background: linear-gradient(135deg, #2196F3, #1976D2); border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(33,150,243,0.3);">
+                            <span style="color: white; font-size: 16px;">⚡</span>
+                        </div>
+                        <div style="font-size: 15px; font-weight: bold; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">测速说明</div>
+                    </div>
+                    <div style="font-size: 13px; color: #e0e0e0; line-height: 1.6; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                        点击下方测速卡片，将在新标签页打开专业测速网站<br>
+                        <span style="color: #64B5F6;">建议选择与您运营商相同的节点，测试结果更准确</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 测速网站卡片区域 -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-bottom: 25px;">
+                <!-- Speedtest.cn 卡片 -->
+                <a href="https://www.speedtest.cn" target="_blank" class="speedtest-card" style="display: block; text-decoration: none;">
+                    <div style="background: linear-gradient(145deg, #4CAF50, #2E7D32, #1B5E20); border-radius: 20px; padding: 24px; color: white; cursor: pointer; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 30px rgba(76,175,80,0.3); height: 140px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden;">
+                        <div style="position: absolute; top: -20px; right: -20px; width: 80px; height: 80px; background: rgba(255,255,255,0.1); border-radius: 50%; z-index: 0;"></div>
+                        <div style="position: relative; z-index: 1;">
+                            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                                <div style="width: 50px; height: 50px; background: linear-gradient(135deg, rgba(255,255,255,0.25), rgba(255,255,255,0.15)); backdrop-filter: blur(10px); border-radius: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.2);">
+                                    <span style="font-size: 24px;">📡</span>
+                                </div>
+                                <div>
+                                    <div style="font-size: 18px; font-weight: 800; letter-spacing: 0.5px;">Speedtest.cn</div>
+                                    <div style="font-size: 12px; opacity: 0.9; margin-top: 4px; color: #C8E6C9;">Ookla中国版</div>
+                                </div>
+                            </div>
+                            <div style="font-size: 13px; opacity: 0.95; line-height: 1.5; color: #E8F5E9;">
+                                国内最专业的测速网站，支持三大运营商节点，测速结果准确可靠
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; opacity: 0.9; position: relative; z-index: 1;">
+                            <span style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 20px;">点击测速</span>
+                            <span style="font-size: 16px; transform: translateX(0); transition: transform 0.3s ease;">➔</span>
+                        </div>
+                    </div>
+                </a>
+                
+                <!-- Speed.do 卡片 -->
+                <a href="https://www.speed.do" target="_blank" class="speedtest-card" style="display: block; text-decoration: none;">
+                    <div style="background: linear-gradient(145deg, #2196F3, #1565C0, #0D47A1); border-radius: 20px; padding: 24px; color: white; cursor: pointer; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 30px rgba(33,150,243,0.3); height: 140px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden;">
+                        <div style="position: absolute; top: 10px; left: 10px; width: 60px; height: 60px; background: rgba(255,255,255,0.1); border-radius: 50%; z-index: 0;"></div>
+                        <div style="position: relative; z-index: 1;">
+                            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                                <div style="width: 50px; height: 50px; background: linear-gradient(135deg, rgba(255,255,255,0.25), rgba(255,255,255,0.15)); backdrop-filter: blur(10px); border-radius: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.2);">
+                                    <span style="font-size: 24px;">🚀</span>
+                                </div>
+                                <div>
+                                    <div style="font-size: 18px; font-weight: 800; letter-spacing: 0.5px;">Speed.do</div>
+                                    <div style="font-size: 12px; opacity: 0.9; margin-top: 4px; color: #BBDEFB;">简洁测速工具</div>
+                                </div>
+                            </div>
+                            <div style="font-size: 13px; opacity: 0.95; line-height: 1.5; color: #E3F2FD;">
+                                界面简洁，操作简单，快速测速，支持国内外多个测速节点
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; opacity: 0.9; position: relative; z-index: 1;">
+                            <span style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 20px;">点击测速</span>
+                            <span style="font-size: 16px; transform: translateX(0); transition: transform 0.3s ease;">➔</span>
+                        </div>
+                    </div>
+                </a>
+                
+                <!-- 中国科学技术大学测速网站 卡片 -->
+                <a href="https://test.ustc.edu.cn/" target="_blank" class="speedtest-card" style="display: block; text-decoration: none;">
+                    <div style="background: linear-gradient(145deg, #F44336, #C62828, #B71C1C); border-radius: 20px; padding: 24px; color: white; cursor: pointer; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 30px rgba(244,67,54,0.3); height: 140px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden;">
+                        <div style="position: absolute; bottom: -30px; right: -30px; width: 100px; height: 100px; background: rgba(255,255,255,0.08); border-radius: 50%; z-index: 0;"></div>
+                        <div style="position: relative; z-index: 1;">
+                            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                                <div style="width: 50px; height: 50px; background: linear-gradient(135deg, rgba(255,255,255,0.25), rgba(255,255,255,0.15)); backdrop-filter: blur(10px); border-radius: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.2);">
+                                    <span style="font-size: 24px;">🎓</span>
+                                </div>
+                                <div>
+                                    <div style="font-size: 18px; font-weight: 800; letter-spacing: 0.5px;">中国科大测速</div>
+                                    <div style="font-size: 12px; opacity: 0.9; margin-top: 4px; color: #FFCDD2;">中科大提供</div>
+                                </div>
+                            </div>
+                            <div style="font-size: 13px; opacity: 0.95; line-height: 1.5; color: #FFEBEE;">
+                                中国科学技术大学提供的专业测速服务，节点稳定，结果可靠
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; opacity: 0.9; position: relative; z-index: 1;">
+                            <span style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 20px;">点击测速</span>
+                            <span style="font-size: 16px; transform: translateX(0); transition: transform 0.3s ease;">➔</span>
+                        </div>
+                    </div>
+                </a>
+                
+                <!-- 站长工具测速 卡片 -->
+                <a href="https://tool.chinaz.com/speedtest" target="_blank" class="speedtest-card" style="display: block; text-decoration: none;">
+                    <div style="background: linear-gradient(145deg, #FF9800, #EF6C00, #E65100); border-radius: 20px; padding: 24px; color: white; cursor: pointer; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 30px rgba(255,152,0,0.3); height: 140px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden;">
+                        <div style="position: absolute; top: -20px; left: -20px; width: 80px; height: 80px; background: rgba(255,255,255,0.1); border-radius: 50%; z-index: 0;"></div>
+                        <div style="position: absolute; bottom: -20px; right: -20px; width: 60px; height: 60px; background: rgba(255,255,255,0.08); border-radius: 50%; z-index: 0;"></div>
+                        <div style="position: relative; z-index: 1;">
+                            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                                <div style="width: 50px; height: 50px; background: linear-gradient(135deg, rgba(255,255,255,0.25), rgba(255,255,255,0.15)); backdrop-filter: blur(10px); border-radius: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.2);">
+                                    <span style="font-size: 24px;">🛠️</span>
+                                </div>
+                                <div>
+                                    <div style="font-size: 18px; font-weight: 800; letter-spacing: 0.5px;">站长工具测速</div>
+                                    <div style="font-size: 12px; opacity: 0.9; margin-top: 4px; color: #FFE0B2;">多节点测速</div>
+                                </div>
+                            </div>
+                            <div style="font-size: 13px; opacity: 0.95; line-height: 1.5; color: #FFF3E0;">
+                                提供全国多节点测速，适合网站管理员测试不同地区访问速度
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; opacity: 0.9; position: relative; z-index: 1;">
+                            <span style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 20px;">点击测速</span>
+                            <span style="font-size: 16px; transform: translateX(0); transition: transform 0.3s ease;">➔</span>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            
+            <!-- 测速建议区域 -->
+            <div style="background: linear-gradient(135deg, rgba(30,30,40,0.8), rgba(20,20,30,0.9)); border-radius: 20px; padding: 20px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 8px 32px rgba(0,0,0,0.2); backdrop-filter: blur(10px);">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                    <div style="width: 32px; height: 32px; background: linear-gradient(135deg, #FF9800, #F57C00); border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(255,152,0,0.3);">
+                        <span style="color: white; font-size: 18px;">💡</span>
+                    </div>
+                    <div style="font-size: 16px; font-weight: bold; color: #FFB74D; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">测速建议</div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px;">
+                    <div style="background: rgba(255,255,255,0.07); border-radius: 14px; padding: 16px; border: 1px solid rgba(255,255,255,0.1); transition: all 0.3s ease;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                            <div style="width: 24px; height: 24px; background: rgba(76,175,80,0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                <span style="color: #4CAF50; font-size: 14px;">1</span>
+                            </div>
+                            <div style="font-size: 13px; font-weight: bold; color: #4CAF50;">关闭其他应用</div>
+                        </div>
+                        <div style="font-size: 12px; color: #B0BEC5; line-height: 1.4;">测速前关闭占用带宽的应用</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.07); border-radius: 14px; padding: 16px; border: 1px solid rgba(255,255,255,0.1); transition: all 0.3s ease;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                            <div style="width: 24px; height: 24px; background: rgba(33,150,243,0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                <span style="color: #2196F3; font-size: 14px;">2</span>
+                            </div>
+                            <div style="font-size: 13px; font-weight: bold; color: #2196F3;">选择合适节点</div>
+                        </div>
+                        <div style="font-size: 12px; color: #B0BEC5; line-height: 1.4;">选择与您运营商相同的节点</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.07); border-radius: 14px; padding: 16px; border: 1px solid rgba(255,255,255,0.1); transition: all 0.3s ease;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                            <div style="width: 24px; height: 24px; background: rgba(156,39,176,0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                <span style="color: #9C27B0; font-size: 14px;">3</span>
+                            </div>
+                            <div style="font-size: 13px; font-weight: bold; color: #9C27B0;">多次测试</div>
+                        </div>
+                        <div style="font-size: 12px; color: #B0BEC5; line-height: 1.4;">在不同时间段多次测试取平均值</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.07); border-radius: 14px; padding: 16px; border: 1px solid rgba(255,255,255,0.1); transition: all 0.3s ease;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                            <div style="width: 24px; height: 24px; background: rgba(255,152,0,0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                <span style="color: #FF9800; font-size: 14px;">4</span>
+                            </div>
+                            <div style="font-size: 13px; font-weight: bold; color: #FF9800;">有线连接</div>
+                        </div>
+                        <div style="font-size: 12px; color: #B0BEC5; line-height: 1.4;">使用有线连接测试结果更稳定</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 底部装饰 -->
+            <div style="text-align: center; margin-top: 20px; padding: 10px;">
+                <div style="font-size: 11px; color: #78909C; letter-spacing: 1px;">NETWORK SPEED TEST</div>
+            </div>
+        </div>
+    </div>
+</div>
+`;
+
+        // 4. 插入到页面中
+        container.insertAdjacentHTML('afterend', pluginHTML);
+
+        // 5. 初始化折叠功能
+        if (typeof collapseGen === 'function') {
+            collapseGen("#network_speedtest_collapse_btn", "#network_speedtest_collapse", "network_speedtest_collapse", () => {});
+        }
+
+        // 6. 初始化卡片悬停效果
+        initCardHoverEffects();
+
+        console.log('网络测速插件已成功加载');
+    };
+
+    // 初始化卡片悬停效果
+    const initCardHoverEffects = () => {
+        const cards = document.querySelectorAll('.speedtest-card');
+        
+        cards.forEach(card => {
+            const cardContent = card.querySelector('div');
+            const arrow = cardContent.querySelector('span:last-child');
+            
+            card.addEventListener('mouseenter', () => {
+                cardContent.style.transform = 'translateY(-8px) scale(1.02)';
+                cardContent.style.boxShadow = '0 20px 40px rgba(0,0,0,0.4)';
+                cardContent.style.transition = 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                if (arrow) {
+                    arrow.style.transform = 'translateX(5px)';
+                }
+                
+                // 添加光泽效果
+                const shine = document.createElement('div');
+                shine.style.cssText = `
+                    position: absolute;
+                    top: 0;
+                    left: -100%;
+                    width: 100%;
+                    height: 100%;
+                    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+                    z-index: 1;
+                    transition: left 0.6s ease;
+                `;
+                cardContent.style.position = 'relative';
+                cardContent.appendChild(shine);
+                
+                setTimeout(() => {
+                    shine.style.left = '100%';
+                }, 10);
+                
+                // 移除光泽元素
+                setTimeout(() => {
+                    if (cardContent.contains(shine)) {
+                        cardContent.removeChild(shine);
+                    }
+                }, 700);
+            });
+            
+            card.addEventListener('mouseleave', () => {
+                cardContent.style.transform = 'translateY(0) scale(1)';
+                cardContent.style.boxShadow = '0 10px 30px rgba(0,0,0,0.3)';
+                if (arrow) {
+                    arrow.style.transform = 'translateX(0)';
+                }
+            });
+            
+            card.addEventListener('mousedown', () => {
+                cardContent.style.transform = 'translateY(-4px) scale(0.98)';
+                cardContent.style.boxShadow = '0 8px 20px rgba(0,0,0,0.3)';
+            });
+            
+            card.addEventListener('mouseup', () => {
+                cardContent.style.transform = 'translateY(-8px) scale(1.02)';
+                cardContent.style.boxShadow = '0 20px 40px rgba(0,0,0,0.4)';
+            });
+        });
+        
+        // 为建议卡片添加悬停效果
+        const tips = document.querySelectorAll('#network-speedtest-plugin .collapse_box > div:last-child > div > div');
+        tips.forEach(tip => {
+            tip.addEventListener('mouseenter', () => {
+                tip.style.transform = 'translateY(-4px)';
+                tip.style.background = 'rgba(255,255,255,0.12)';
+                tip.style.borderColor = 'rgba(255,255,255,0.2)';
+                tip.style.boxShadow = '0 8px 20px rgba(0,0,0,0.2)';
+            });
+            
+            tip.addEventListener('mouseleave', () => {
+                tip.style.transform = 'translateY(0)';
+                tip.style.background = 'rgba(255,255,255,0.07)';
+                tip.style.borderColor = 'rgba(255,255,255,0.1)';
+                tip.style.boxShadow = 'none';
+            });
+        });
+    };
+
+    // 开始初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initSpeedTestPlugin);
+    } else {
+        initSpeedTestPlugin();
+    }
+})();
+</script>

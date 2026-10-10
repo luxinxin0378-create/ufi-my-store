@@ -1,0 +1,497 @@
+<script>
+(() => {
+    const STAT_MAP = {
+        0: { label: "未知", selectable: false, color: "#bd93f9" },
+        1: { label: "可用", selectable: true, color: "#50fa7b" },
+        2: { label: "当前", selectable: false, color: "#8be9fd" },
+        3: { label: "禁止", selectable: false, color: "#ff5555" }
+    };
+
+    const ensureStyle = () => {
+        if (document.getElementById("carrier-switcher-style")) return;
+        const style = document.createElement("style");
+        style.id = "carrier-switcher-style";
+        style.textContent = `
+            #carrier-switcher-modal {
+                position: fixed;
+                inset: 0;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                z-index: 9999;
+                background: rgba(12, 12, 16, 0.55);
+                backdrop-filter: blur(6px);
+            }
+            #carrier-switcher-modal .carrier-dialog {
+                width: 92%;
+                max-width: 560px;
+                max-height: 80vh;
+                background: rgba(30, 30, 46, 0.92);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 18px;
+                box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25);
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            #carrier-switcher-modal .carrier-header {
+                padding: 16px 18px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                background: rgba(40, 40, 56, 0.85);
+                color: #f8f8f2;
+                font-size: 18px;
+                font-weight: 600;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            }
+            #carrier-switcher-modal .carrier-actions {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            #carrier-switcher-modal button.carrier-btn {
+                padding: 6px 14px;
+                border-radius: 10px;
+                border: none;
+                cursor: pointer;
+                background: rgba(70, 70, 90, 0.8);
+                color: #f8f8f2;
+                transition: background 0.2s ease;
+            }
+            #carrier-switcher-modal button.carrier-btn:hover:enabled {
+                background: rgba(80, 222, 169, 0.85);
+            }
+            #carrier-switcher-modal button.carrier-btn:disabled {
+                background: rgba(90, 90, 110, 0.4);
+                color: rgba(248, 248, 242, 0.5);
+                cursor: not-allowed;
+            }
+            #carrier-switcher-modal .carrier-body {
+                padding: 18px;
+                display: flex;
+                flex-direction: column;
+                gap: 14px;
+                overflow-y: auto;
+            }
+            #carrier-switcher-modal .carrier-message {
+                color: #8be9fd;
+                font-size: 14px;
+            }
+            #carrier-switcher-modal .carrier-loading {
+                display: none;
+                align-items: center;
+                justify-content: center;
+                gap: 12px;
+                padding: 18px 12px;
+                border-radius: 12px;
+                background: rgba(68, 71, 90, 0.3);
+                color: #f8f8f2;
+                font-size: 15px;
+            }
+            #carrier-switcher-modal .carrier-spinner {
+                width: 22px;
+                height: 22px;
+                border-radius: 50%;
+                border: 3px solid rgba(248, 248, 242, 0.25);
+                border-top-color: #50fa7b;
+                animation: carrier-spin 0.9s linear infinite;
+            }
+            @keyframes carrier-spin {
+                to { transform: rotate(360deg); }
+            }
+            #carrier-switcher-modal .carrier-list {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            #carrier-switcher-modal .carrier-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 12px 14px;
+                background: rgba(56, 56, 72, 0.6);
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 0.06);
+            }
+            #carrier-switcher-modal .carrier-info {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+            #carrier-switcher-modal .carrier-name {
+                font-size: 16px;
+                font-weight: 600;
+                color: #f8f8f2;
+            }
+            #carrier-switcher-modal .carrier-meta {
+                font-size: 13px;
+                color: rgba(248, 248, 242, 0.7);
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            #carrier-switcher-modal .carrier-empty {
+                padding: 18px 12px;
+                text-align: center;
+                background: rgba(68, 71, 90, 0.3);
+                border-radius: 12px;
+                color: rgba(248, 248, 242, 0.65);
+                font-size: 15px;
+            }
+        `;
+        document.head.appendChild(style);
+    };
+
+    const fetchWithSign = async (url, method = "GET") => {
+        if (typeof CryptoJS === "undefined") {
+            throw new Error("未找到 CryptoJS，无法生成签名");
+        }
+
+        const timestamp = Date.now();
+        const path = url.replace(/^https?:\/\/[^/]+/, "");
+        const httpMethod = method.toUpperCase();
+        const raw = `minikano${httpMethod}${path}${timestamp}`;
+        const secret = "minikano_kOyXz0Ciz4V7wR0IeKmJFYFQ20jd";
+
+        const hmac = CryptoJS.HmacMD5(raw, secret);
+        const hmacHex = hmac.toString(CryptoJS.enc.Hex);
+        const half = Math.ceil(hmacHex.length / 2);
+        const part1 = hmacHex.slice(0, half);
+        const part2 = hmacHex.slice(half);
+
+        const sha1 = CryptoJS.SHA256(CryptoJS.enc.Hex.parse(part1));
+        const sha2 = CryptoJS.SHA256(CryptoJS.enc.Hex.parse(part2));
+        const combined = CryptoJS.enc.Hex.parse(sha1.toString() + sha2.toString());
+        const finalHash = CryptoJS.SHA256(combined);
+        const sign = finalHash.toString(CryptoJS.enc.Hex);
+
+        const headers = new Headers({
+            "kano-t": String(timestamp),
+            "kano-sign": sign
+        });
+
+        let bearer = null;
+        try {
+            if (typeof localStorage !== "undefined") {
+                bearer = localStorage.getItem("kano_sms_token") || null;
+            }
+        } catch (error) {
+            console.warn("读取 kano_sms_token 失败", error);
+        }
+
+        if (bearer) {
+            headers.set("Authorization", bearer);
+        } else if (typeof authToken !== "undefined" && authToken) {
+            headers.set("Authorization", authToken);
+        } else if (typeof getAuthorization === "function") {
+            const token = getAuthorization();
+            if (token) {
+                headers.set("Authorization", token);
+            }
+        }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 180000);
+
+        try {
+            return await fetch(url, {
+                method: httpMethod,
+                headers,
+                signal: controller.signal
+            });
+        } finally {
+            clearTimeout(timeout);
+        }
+    };
+
+    const execATCommand = async (command, slot = 0) => {
+        const clampedSlot = Number.isFinite(Number(slot)) ? Math.max(0, Math.min(1, Number(slot))) : 0;
+        const url = `/api/AT?command=${encodeURIComponent(command)}&slot=${clampedSlot}`;
+        try {
+            const response = await fetchWithSign(url);
+            const text = await response.text();
+
+            let parsedText = text;
+            let json = null;
+            try {
+                json = JSON.parse(text);
+                if (json && typeof json.result === "string") {
+                    parsedText = json.result;
+                }
+            } catch {
+                // 非 JSON 响应按原文处理
+            }
+
+            const success = response.ok && /\bOK\b/i.test(parsedText);
+            return { success, content: parsedText, raw: text, json };
+        } catch (error) {
+            return { success: false, content: error?.message || "AT 接口请求失败" };
+        }
+    };
+
+    const parseOperators = (raw = "") => {
+        const results = [];
+        const normalized = raw
+            .replace(/^§/, "")
+            .replace(/\\"/g, '"')
+            .replace(/\r|\n/g, "")
+            .replace(/,(?=\s*\))/g, "")
+            .trim();
+
+        const matchAll = normalized.match(/\([^()]+\)/g);
+        if (!matchAll) return results;
+
+        for (const segment of matchAll) {
+            const inner = segment.slice(1, -1);
+            const parts = inner.split(/,(?=(?:[^"]*\"[^"]*\")*[^"]*$)/).map(piece => piece.trim());
+            if (parts.length < 5) continue;
+
+            const [statRaw, longNameRaw, shortNameRaw, numericRaw, actRaw] = parts;
+            const stat = Number(statRaw);
+            const longName = longNameRaw?.replace(/^\"|\"$/g, "")?.trim() || "";
+            const shortName = shortNameRaw?.replace(/^\"|\"$/g, "")?.trim() || "";
+            const numeric = numericRaw?.replace(/^\"|\"$/g, "")?.trim() || "";
+            const act = actRaw?.replace(/^\"|\"$/g, "")?.trim();
+
+            results.push({ stat, longName, shortName, numeric, act });
+        }
+
+        return results;
+    };
+
+    const formatAct = (act) => {
+        const map = {
+            "0": "GSM",
+            "1": "GSM Compact",
+            "2": "UTRAN",
+            "3": "GSM w/EGPRS",
+            "4": "UTRAN w/HSDPA",
+            "5": "UTRAN w/HSUPA",
+            "6": "UTRAN w/HSPA",
+            "7": "LTE",
+            "8": "E-UTRAN",
+            "9": "5G NR"
+        };
+        return map[String(act)] || act || "-";
+    };
+
+    const createModal = () => {
+        ensureStyle();
+
+        const overlay = document.createElement("div");
+        overlay.id = "carrier-switcher-modal";
+        overlay.innerHTML = `
+            <div class="carrier-dialog">
+                <div class="carrier-header">
+                    <span>切换运营商</span>
+                    <div class="carrier-actions">
+                        <select class="carrier-slot" data-action="slot">
+                            <option value="0" selected>SIM1</option>
+                            <option value="1">SIM2</option>
+                        </select>
+                        <button class="carrier-btn" data-action="refresh">刷新</button>
+                        <button class="carrier-btn" data-action="close">关闭</button>
+                    </div>
+                </div>
+                <div class="carrier-body">
+                    <div class="carrier-loading" id="carrier-loading">
+                        <div class="carrier-spinner"></div>
+                        <span>正在扫描可用运营商...</span>
+                    </div>
+                    <div class="carrier-message" id="carrier-message">点击右上角刷新按钮开始扫描。</div>
+                    <div class="carrier-list" id="carrier-list"></div>
+                    <div class="carrier-empty" id="carrier-empty" style="display:none;">未找到可用的运营商。</div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        return overlay;
+    };
+
+    const modal = createModal();
+    const refreshBtn = modal.querySelector('button[data-action="refresh"]');
+    const closeBtn = modal.querySelector('button[data-action="close"]');
+    const slotSelect = modal.querySelector('select[data-action="slot"]');
+    const loadingBox = modal.querySelector('#carrier-loading');
+    const messageBox = modal.querySelector('#carrier-message');
+    const listBox = modal.querySelector('#carrier-list');
+    const emptyBox = modal.querySelector('#carrier-empty');
+
+    let scanning = false;
+    let selecting = false;
+
+    const showModal = () => {
+        modal.style.display = 'flex';
+    };
+
+    const hideModal = () => {
+        if (scanning || selecting) return;
+        modal.style.display = 'none';
+    };
+
+    closeBtn.addEventListener('click', hideModal);
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) hideModal();
+    });
+
+    const setLoading = (value) => {
+        scanning = value;
+        loadingBox.style.display = value ? 'flex' : 'none';
+        refreshBtn.disabled = value || selecting;
+        slotSelect.disabled = value || selecting;
+    };
+
+    const setSelecting = (value) => {
+        selecting = value;
+        refreshBtn.disabled = value || scanning;
+        slotSelect.disabled = value || scanning;
+        const buttons = listBox.querySelectorAll('button[data-code]');
+        buttons.forEach(btn => {
+            if (value) {
+                btn.dataset.prevDisabled = btn.disabled ? '1' : '0';
+                btn.disabled = true;
+            } else {
+                if (btn.dataset.prevDisabled === '0') {
+                    btn.disabled = false;
+                }
+                delete btn.dataset.prevDisabled;
+            }
+        });
+    };
+
+    const renderOperators = (operators) => {
+        listBox.innerHTML = '';
+
+        if (!operators.length) {
+            emptyBox.style.display = 'block';
+            return;
+        }
+
+        emptyBox.style.display = 'none';
+
+        operators.forEach((item) => {
+            const statInfo = STAT_MAP[item.stat] || STAT_MAP[0];
+            const displayName = item.longName || item.shortName || item.numeric || '未知运营商';
+            const isSelectable = Boolean(statInfo.selectable && item.numeric);
+            const wrapper = document.createElement('div');
+            wrapper.className = 'carrier-item';
+            wrapper.innerHTML = `
+                <div class="carrier-info">
+                    <span class="carrier-name">${displayName}</span>
+                    <div class="carrier-meta">
+                        <span>状态：<span style="color:${statInfo.color};">${statInfo.label}</span></span>
+                        <span>代码：${item.numeric || '-'}</span>
+                        <span>制式：${formatAct(item.act)}</span>
+                    </div>
+                </div>
+                <button class="carrier-btn carrier-select" data-code="${item.numeric || ''}" ${isSelectable ? '' : 'disabled'}>${statInfo.label === '当前' ? '当前网络' : '选择'}</button>
+            `;
+
+            const selectBtn = wrapper.querySelector('button');
+            if (isSelectable) {
+                selectBtn.addEventListener('click', () => handleSelect(item));
+            }
+
+            listBox.appendChild(wrapper);
+        });
+    };
+
+    const handleSelect = async (operator) => {
+        if (!operator.numeric) {
+            createToast?.('无法获取运营商代码，无法切换', 'red');
+            return;
+        }
+
+        setSelecting(true);
+        messageBox.textContent = `正在切换至 ${operator.longName || operator.shortName || operator.numeric}，请稍候...`;
+
+        try {
+            const mode = Number.isFinite(Number(operator.act)) ? `,${Number(operator.act)}` : "";
+            const command = `AT+COPS=1,2,"${operator.numeric}"${mode}`;
+            const result = await execATCommand(command, Number(slotSelect?.value ?? 0));
+            if (result?.success) {
+                createToast?.('切换命令已发送，等待生效', 'green');
+                messageBox.textContent = '已发送切换命令，网络注册可能需要数秒。';
+                hideModal();
+            } else {
+                const cause = result?.content?.trim() || '未知错误';
+                createToast?.(`切换失败：${cause}`, 'red');
+                messageBox.textContent = `切换失败：${cause}`;
+            }
+        } catch (error) {
+            createToast?.(`切换异常：${error.message}`, 'red');
+            messageBox.textContent = `切换异常：${error.message}`;
+        } finally {
+            setSelecting(false);
+        }
+    };
+
+    const scanOperators = async () => {
+        if (scanning) return;
+        setLoading(true);
+        messageBox.textContent = '正在扫描，请稍候... (扫描中网络会中断, 请耐心等待)';
+        listBox.innerHTML = '';
+        emptyBox.style.display = 'none';
+
+        try {
+            const result = await execATCommand('AT+COPS=?', Number(slotSelect?.value ?? 0));
+            if (!result?.success) {
+                const msg = result?.content?.trim() || '扫描失败';
+                messageBox.textContent = `扫描失败：${msg}`;
+                createToast?.(`扫描失败：${msg}`, 'red');
+                return;
+            }
+
+            const operators = parseOperators(result.content || '');
+            if (!operators.length) {
+                emptyBox.style.display = 'block';
+                messageBox.textContent = '扫描完成，但未获取到任何运营商。';
+                return;
+            }
+
+            renderOperators(operators);
+            messageBox.textContent = `扫描完成，共发现 ${operators.length} 个运营商。`;
+        } catch (error) {
+            messageBox.textContent = `扫描异常：${error.message}`;
+            createToast?.(`扫描异常：${error.message}`, 'red');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    refreshBtn.addEventListener('click', scanOperators);
+    slotSelect.addEventListener('change', () => {
+        messageBox.textContent = `已切换到 ${slotSelect.selectedIndex === 0 ? 'SIM1' : 'SIM2'}，请刷新列表。`;
+    });
+
+    const createEntryButton = () => {
+        const btn = document.createElement('button');
+        btn.textContent = '切换运营商';
+        btn.style.marginLeft = '10px';
+        btn.addEventListener('click', () => {
+            showModal();
+        });
+        return btn;
+    };
+
+    const insertButton = () => {
+        const container = document.querySelector('.actions-buttons');
+        if (!container) return false;
+        const btn = createEntryButton();
+        container.appendChild(btn);
+        return true;
+    };
+
+    if (!insertButton()) {
+        const interval = setInterval(() => {
+            if (insertButton()) {
+                clearInterval(interval);
+            }
+        }, 200);
+        setTimeout(() => clearInterval(interval), 8000);
+    }
+
+})();
+</script>

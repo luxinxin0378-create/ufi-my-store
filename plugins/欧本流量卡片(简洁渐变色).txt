@@ -1,0 +1,240 @@
+<script>
+(() => {
+  const cardNumber = '输入欧本充值号'; 
+  const netCard = document.querySelector('.net-card');
+  if (!netCard) return;
+  const trafficCard = document.createElement('div');
+  trafficCard.className = 'chart statusCard';
+  trafficCard.style.marginBottom = '0';
+  trafficCard.style.gridColumn = '1/-1';
+  trafficCard.style.marginLeft = '0px';
+  trafficCard.style.marginRight = '0px';
+  trafficCard.style.width = '200px';
+  trafficCard.classList.add('wlk');
+  trafficCard.classList.add('statusCard');
+  trafficCard.classList.add('net-card');
+  trafficCard.style.position = 'relative';
+  trafficCard.style.padding = "6px 8px 8px 8px";
+  trafficCard.style.fontSize = '12px';
+  trafficCard.style.boxSizing = 'border-box';
+  trafficCard.style.height = '70px';
+  const el_title = document.createElement('div');
+  el_title.innerHTML = "流量监控";
+  el_title.style.position = 'absolute';
+  el_title.style.right = '6px';
+  el_title.style.top = '6px';
+  el_title.style.fontSize = '9px';
+  el_title.style.borderRadius = '3px';
+  el_title.style.padding = '1px 4px';
+  el_title.style.backgroundColor = '#e6f7ff';
+  el_title.style.color = '#1890ff';
+  el_title.id = 'cardStatus';
+  const obnBrand = document.createElement('div');
+  obnBrand.innerHTML = "欧本流量";
+  obnBrand.style.position = 'absolute';
+  obnBrand.style.left = '6px';
+  obnBrand.style.top = '6px';
+  obnBrand.style.fontSize = '9px';
+  obnBrand.style.borderRadius = '3px';
+  obnBrand.style.padding = '1px 4px';
+  obnBrand.style.backgroundColor = '#f6ffed';
+  obnBrand.style.color = '#ff7d00';
+  obnBrand.style.fontWeight = 'bold';
+  const refreshTime = document.createElement('div');
+  refreshTime.id = 'refreshTime';
+  refreshTime.style.position = 'absolute';
+  refreshTime.style.bottom = '4px';
+  refreshTime.style.left = '6px'; 
+  refreshTime.style.fontSize = '9px';
+  refreshTime.style.color = '#ffffff';
+  refreshTime.style.padding = '1px 4px';
+  refreshTime.style.borderRadius = '2px';
+  refreshTime.style.zIndex = '10';
+  refreshTime.style.display = 'flex';
+  refreshTime.style.alignItems = 'center';
+  refreshTime.style.gap = '2px';
+  const expireTime = document.createElement('div');
+  expireTime.id = 'expireTime';
+  expireTime.style.position = 'absolute';
+  expireTime.style.bottom = '4px';
+  expireTime.style.right = '6px';
+  expireTime.style.fontSize = '9px';
+  expireTime.style.color = '#ffffff';
+  expireTime.style.padding = '1px 4px';
+  expireTime.style.borderRadius = '2px';
+  expireTime.style.zIndex = '10';
+  const progressContainer = document.createElement('div');
+  progressContainer.id = 'progressContainer';
+  progressContainer.style.position = 'absolute';
+  progressContainer.style.bottom = '4px';
+  progressContainer.style.left = '50%';
+  progressContainer.style.transform = 'translateX(-50%)';
+  progressContainer.style.width = '120px';
+  progressContainer.style.height = '10px';
+  progressContainer.style.backgroundColor = '#ADFF2F';
+  progressContainer.style.borderRadius = '3px';
+  progressContainer.style.overflow = 'hidden';
+  progressContainer.style.zIndex = '10';
+  progressContainer.style.boxShadow = '0 1px 2px rgba(0,0,0,1.2)';
+  const progressBar = document.createElement('div');
+  progressBar.id = 'progressBar';
+  progressBar.style.height = '100%';
+  progressBar.style.width = '0%';
+  progressBar.style.borderRadius = '3px';
+  progressBar.style.background = 'linear-gradient(90deg, #52c41a 0%, #faad14 50%, #f5222d 100%)';
+  progressBar.style.transition = 'width 0.5s ease';
+  progressBar.style.boxShadow = '0 0 2px rgba(0,0,0,0.2)';
+  progressContainer.appendChild(progressBar);
+  trafficCard.innerHTML = `
+    <div style="display: flex; flex-direction: column; height: 100%;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px; margin-top: 8px;">
+        <div style="text-align: center; flex: 1;">
+          <div style="font-size: 9px; margin-bottom: 2px;">总流量</div>
+          <div style="font-size: 13px; font-weight: bold; color: #1890ff;" id="totalValue">0.00 <span style="color: #ffff99; font-size: 10px;">G</span></div>
+        </div>
+        <div style="text-align: center; flex: 1;">
+          <div style="font-size: 9px; margin-bottom: 2px;">剩余流量</div>
+          <div style="font-size: 13px; font-weight: bold; color: #33ffff;" id="remainingValue">0.00 <span style="color: #ffff99; font-size: 10px;">G</span></div>
+        </div>
+        <div style="text-align: center; flex: 1;">
+          <div style="font-size: 9px; margin-bottom: 2px;">已用流量</div>
+          <div style="font-size: 13px; font-weight: bold; color: #ff99ff;" id="usedValue">0.00 <span style="color: #ffff99; font-size: 10px;">G</span></div>
+        </div>
+      </div>
+    </div>
+  `;
+  trafficCard.appendChild(el_title);
+  trafficCard.appendChild(obnBrand);
+  trafficCard.appendChild(progressContainer);
+  trafficCard.appendChild(refreshTime);
+  trafficCard.appendChild(expireTime);
+  netCard.parentNode.insertBefore(trafficCard, netCard.nextSibling);
+  function updateRefreshTime() {
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = now.getMonth() + 1;
+    const day = now.getDate();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    const refreshTimeElement = document.getElementById('refreshTime');
+    refreshTimeElement.innerHTML = '';
+    const dateSpan = document.createElement('span');
+    dateSpan.textContent = `刷新时间:${year}-${month}-${day}`;
+    dateSpan.style.color = '#ffffff';
+    const timeSpan = document.createElement('span');
+    timeSpan.textContent = `${hours}:${minutes}`;
+    timeSpan.style.fontWeight = 'bold';
+    const hour = now.getHours();
+    const minute = now.getMinutes();
+    const currentTime = hour + minute / 100;
+    if (currentTime >= 6.00 && currentTime < 10.00) {
+      timeSpan.style.color = '#7CFC00';
+    } else if (currentTime >= 10.00 && currentTime < 14.00) {
+      timeSpan.style.color = '#FFA500';
+    } else if (currentTime >= 14.00 && currentTime < 18.30) {
+      timeSpan.style.color = '#cccc00';
+    } else if (currentTime >= 18.30 && currentTime < 23.00) {
+      timeSpan.style.color = '#87cefa';
+    } else {
+      timeSpan.style.color = '#00FFFF';
+    }
+    refreshTimeElement.appendChild(dateSpan);
+    refreshTimeElement.appendChild(timeSpan);
+  }
+  function setRemainingValueColor(remainingPercentage) {
+    const remainingValueElement = document.getElementById('remainingValue');
+    const percent = parseFloat(remainingPercentage);
+    if (percent < 0) {
+      remainingValueElement.style.color = '#cf1322';
+    } else if (percent <= 10) {
+      remainingValueElement.style.color = '#ff4d4f';
+    } else if (percent <= 15) {
+      remainingValueElement.style.color = '#ff7a45';
+    } else if (percent <= 20) {
+      remainingValueElement.style.color = '#ffa940';
+    } else if (percent <= 25) {
+      remainingValueElement.style.color = '#ffc53d';
+    } else if (percent <= 30) {
+      remainingValueElement.style.color = '#fadb14';
+    } else if (percent <= 35) {
+      remainingValueElement.style.color = '#bae637';
+    } else if (percent <= 40) {
+      remainingValueElement.style.color = '#95de64';
+    } else if (percent <= 45) {
+      remainingValueElement.style.color = '#73d13d';
+    } else if (percent <= 50) {
+      remainingValueElement.style.color = '#52c41a';
+    } else if (percent <= 55) {
+      remainingValueElement.style.color = '#389e0d';
+    } else if (percent <= 60) {
+      remainingValueElement.style.color = '#237804';
+    } else if (percent <= 65) {
+      remainingValueElement.style.color = '#135200';
+    } else if (percent <= 70) {
+      remainingValueElement.style.color = '#092b00';
+    } else if (percent <= 75) {
+      remainingValueElement.style.color = '#006d75';
+    } else if (percent <= 80) {
+      remainingValueElement.style.color = '#08979c';
+    } else if (percent <= 85) {
+      remainingValueElement.style.color = '#13c2c2';
+    } else if (percent <= 90) {
+      remainingValueElement.style.color = '#36cfc9';
+    } else if (percent <= 95) {
+      remainingValueElement.style.color = '#5cdbd3';
+    } else {
+      remainingValueElement.style.color = '#87e8de';
+    }
+  }
+  function fetchTrafficData() {
+    const script = document.createElement('script');
+    script.src = `http://wifi.zhongtianiot.com/api/card/intelligentDetection?dev_no=${cardNumber}&callback=handleTrafficData`;
+    document.head.appendChild(script);
+    script.onload = function() {
+      document.head.removeChild(script);
+    };
+  }
+  window.handleTrafficData = function(response) {
+    const statusElement = document.getElementById('cardStatus');
+    const expireTimeElement = document.getElementById('expireTime');
+    const progressBar = document.getElementById('progressBar');
+    if (response.code === 1 && response.data) {
+      const data = response.data;
+      const totalGB = (data.totalAmount / 1024).toFixed(1);
+      const remainingGB = (data.surplus / 1024).toFixed(1);
+      const usedGB = ((data.totalAmount - data.surplus) / 1024).toFixed(1);
+      const usedPercentage = ((data.totalAmount - data.surplus) / data.totalAmount * 100).toFixed(1);
+      const remainingPercentage = (data.surplus / data.totalAmount * 100).toFixed(1);
+      document.getElementById('totalValue').innerHTML = `${totalGB} <span style="color: #ffff99; font-size: 10px;">G</span>`;
+      document.getElementById('remainingValue').innerHTML = `${remainingGB} <span style="color: #ffff99; font-size: 10px;">G</span>`;
+      document.getElementById('usedValue').innerHTML = `${usedGB} <span style="color: #ffff99; font-size: 10px;">G</span>`;
+      progressBar.style.width = `${usedPercentage}%`;
+      setRemainingValueColor(remainingPercentage);
+      if (data.expiretime) {
+        const expireDate = data.expiretime.split(' ')[0];
+        expireTimeElement.textContent = `到期时间: ${expireDate}`;
+      }
+      if (data.description === '该卡状态正常') {
+        statusElement.textContent = '状态正常';
+        statusElement.style.backgroundColor = '#e6f7ff';
+        statusElement.style.color = '#1890ff';
+      } else {
+        statusElement.textContent = '状态异常';
+        statusElement.style.backgroundColor = '#fff2f0';
+        statusElement.style.color = '#ff4d4f';
+      }
+    } else {
+      statusElement.textContent = '查询失败';
+      statusElement.style.backgroundColor = '#fff2f0';
+      statusElement.style.color = '#ff4d4f';
+      expireTimeElement.textContent = '到期时间: --';
+      progressBar.style.width = '0%';
+      document.getElementById('remainingValue').style.color = '#33ffff';
+    }
+    updateRefreshTime();
+    setTimeout(fetchTrafficData, 30 * 60 * 1000);
+  };
+  trafficCard.addEventListener('click', fetchTrafficData);
+  fetchTrafficData();
+})();
+</script>

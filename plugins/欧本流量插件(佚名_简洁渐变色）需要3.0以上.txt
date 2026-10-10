@@ -1,0 +1,247 @@
+<script>
+(() => {
+  const cardNumber = '欧本充值号'; 
+  
+  const netCard = document.querySelector('.net-card');
+  if (!netCard) return;
+  
+  const cardBaseStyles = {
+    marginBottom: '0',
+    gridColumn: '1/-1',
+    marginLeft: '0px',
+    marginRight: '0px',
+    width: '200px',
+    position: 'relative',
+    padding: '6px 8px 8px 8px',
+    fontSize: '12px',
+    boxSizing: 'border-box',
+    height: '70px'
+  };
+  
+  const labelBaseStyles = {
+    position: 'absolute',
+    top: '6px',
+    fontSize: '9px',
+    borderRadius: '3px',
+    padding: '1px 4px',
+    backgroundColor: '#e6f7ff'
+  };
+  
+  const timeBaseStyles = {
+    position: 'absolute',
+    bottom: '4px',
+    fontSize: '9px',
+    color: '#ffffff',
+    padding: '1px 4px',
+    borderRadius: '2px',
+    zIndex: '10'
+  };
+  
+  const trafficCard = document.createElement('div');
+  trafficCard.className = 'chart statusCard wlk net-card';
+  Object.assign(trafficCard.style, cardBaseStyles);
+  
+  const el_title = document.createElement('div');
+  el_title.innerHTML = "流量监控";
+  el_title.id = 'cardStatus';
+  Object.assign(el_title.style, labelBaseStyles);
+  el_title.style.right = '8px';
+  el_title.style.color = '#1890ff';
+  
+  const obnBrand = document.createElement('div');
+  obnBrand.innerHTML = "欧本流量";
+  Object.assign(obnBrand.style, labelBaseStyles);
+  obnBrand.style.left = '8px';
+  obnBrand.style.color = '#ff6633';
+  obnBrand.style.fontWeight = 'bold';
+  
+  const refreshTime = document.createElement('div');
+  refreshTime.id = 'refreshTime';
+  Object.assign(refreshTime.style, timeBaseStyles);
+  refreshTime.style.left = '6px';
+  refreshTime.style.display = 'flex';
+  refreshTime.style.alignItems = 'center';
+  refreshTime.style.gap = '2px';
+  
+  const expireTime = document.createElement('div');
+  expireTime.id = 'expireTime';
+  Object.assign(expireTime.style, timeBaseStyles);
+  expireTime.style.right = '6px';
+  
+  const progressContainer = document.createElement('div');
+  progressContainer.id = 'progressContainer';
+  progressContainer.style.position = 'absolute';
+  progressContainer.style.bottom = '4px';
+  progressContainer.style.left = '50%';
+  progressContainer.style.transform = 'translateX(-50%)';
+  progressContainer.style.width = '120px';
+  progressContainer.style.height = '10px';
+  progressContainer.style.backgroundColor = '#ADFF2F';
+  progressContainer.style.borderRadius = '3px';
+  progressContainer.style.overflow = 'hidden';
+  progressContainer.style.zIndex = '10';
+  progressContainer.style.boxShadow = '0 1px 2px rgba(0,0,0,1.2)';
+  
+  const progressBar = document.createElement('div');
+  progressBar.id = 'progressBar';
+  progressBar.style.height = '100%';
+  progressBar.style.width = '0%';
+  progressBar.style.borderRadius = '3px';
+  progressBar.style.background = 'linear-gradient(90deg, #52c41a 0%, #faad14 50%, #f5222d 100%)';
+  progressBar.style.transition = 'width 0.5s ease';
+  progressBar.style.boxShadow = '0 0 2px rgba(0,0,0,0.2)';
+  progressContainer.appendChild(progressBar);
+  
+  trafficCard.innerHTML = `
+    <div style="display: flex; flex-direction: column; height: 100%;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px; margin-top: 8px;">
+        <div style="text-align: center; flex: 1;">
+          <div style="font-size: 9px; margin-bottom: 2px;">总流量</div>
+          <div style="font-size: 13px; font-weight: bold; color: #00e5ff;" id="totalValue">0.00 <span style="color: #ffff99; font-size: 10px;">G</span></div>
+        </div>
+        <div style="text-align: center; flex: 1;">
+          <div style="font-size: 9px; margin-bottom: 2px;">剩余流量</div>
+          <div style="font-size: 13px; font-weight: bold; color: #33ffff;" id="remainingValue">0.00 <span style="color: #ffff99; font-size: 10px;">G</span></div>
+        </div>
+        <div style="text-align: center; flex: 1;">
+          <div style="font-size: 9px; margin-bottom: 2px;">已用流量</div>
+          <div style="font-size: 13px; font-weight: bold; color: #ff8800;" id="usedValue">0.00 <span style="color: #ffff99; font-size: 10px;">G</span></div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  trafficCard.appendChild(el_title);
+  trafficCard.appendChild(obnBrand);
+  trafficCard.appendChild(progressContainer);
+  trafficCard.appendChild(refreshTime);
+  trafficCard.appendChild(expireTime);
+  
+  netCard.parentNode.insertBefore(trafficCard, netCard.nextSibling);
+  
+  function updateRefreshTime() {
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = now.getMonth() + 1;
+    const day = now.getDate();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    
+    const refreshTimeElement = document.getElementById('refreshTime');
+    refreshTimeElement.innerHTML = '';
+    
+    const dateSpan = document.createElement('span');
+    dateSpan.textContent = `刷新时间:${year}-${month}-${day}`;
+    dateSpan.style.color = '#ffffff';
+    
+    const timeSpan = document.createElement('span');
+    timeSpan.textContent = `${hours}:${minutes}`;
+    timeSpan.style.fontWeight = 'bold';
+    
+    const currentTime = now.getHours() + now.getMinutes() / 100;
+    if (currentTime >= 6.00 && currentTime < 10.00) timeSpan.style.color = '#7CFC00';
+    else if (currentTime >= 10.00 && currentTime < 14.00) timeSpan.style.color = '#FFA500';
+    else if (currentTime >= 14.00 && currentTime < 18.30) timeSpan.style.color = '#cccc00';
+    else if (currentTime >= 18.30 && currentTime < 23.00) timeSpan.style.color = '#87cefa';
+    else timeSpan.style.color = '#00FFFF';
+    
+    refreshTimeElement.appendChild(dateSpan);
+    refreshTimeElement.appendChild(timeSpan);
+  }
+  
+  function setRemainingValueColor(remainingPercentage) {
+    const remainingValueElement = document.getElementById('remainingValue');
+    const percent = parseFloat(remainingPercentage);
+    
+    if (percent < 0) {
+      remainingValueElement.style.color = '#cf1322';
+      return;
+    }
+    
+    const getBatteryColor = (level) => {
+        if (level <= 5) return "#ff5555";
+        if (level <= 10) return "#ff6e6e";
+        if (level <= 15) return "#ff8787";
+        if (level <= 20) return "#ffa0a0";
+        if (level <= 25) return "#ffb9b9";
+        if (level <= 30) return "#ffb86c";
+        if (level <= 35) return "#ffc285";
+        if (level <= 40) return "#ffcc9e";
+        if (level <= 45) return "#ffd6b7";
+        if (level <= 50) return "#ffe0d0";
+        if (level <= 55) return "#e6e05e";
+        if (level <= 60) return "#e9e97a";
+        if (level <= 65) return "#ecec96";
+        if (level <= 70) return "#efefb2";
+        if (level <= 75) return "#8be9fd";
+        if (level <= 80) return "#9aecfd";
+        if (level <= 85) return "#a9effd";
+        if (level <= 90) return "#b8f2fd";
+        if (level <= 95) return "#c7f5fd";
+        return "#50fa7b";
+    };
+    
+    remainingValueElement.style.color = getBatteryColor(percent);
+  }
+  
+  function fetchTrafficData() {
+    const script = document.createElement('script');
+    script.src = `http://wifi.zhongtianiot.com/api/card/intelligentDetection?dev_no=${cardNumber}&callback=handleTrafficData`;
+    document.head.appendChild(script);
+    
+    script.onload = function() {
+      document.head.removeChild(script);
+    };
+  }
+
+  window.handleTrafficData = function(response) {
+    const statusElement = document.getElementById('cardStatus');
+    const expireTimeElement = document.getElementById('expireTime');
+    const progressBar = document.getElementById('progressBar');
+    
+    if (response.code === 1 && response.data) {
+      const data = response.data;
+      const totalGB = (data.totalAmount / 1024).toFixed(1);
+      const remainingGB = (data.surplus / 1024).toFixed(1);
+      const usedGB = ((data.totalAmount - data.surplus) / 1024).toFixed(1);
+      const usedPercentage = ((data.totalAmount - data.surplus) / data.totalAmount * 100).toFixed(1);
+      const remainingPercentage = (data.surplus / data.totalAmount * 100).toFixed(1);
+      
+      document.getElementById('totalValue').innerHTML = `${totalGB} <span style="color: #ffff99; font-size: 10px;">G</span>`;
+      document.getElementById('remainingValue').innerHTML = `${remainingGB} <span style="color: #ffff99; font-size: 10px;">G</span>`;
+      document.getElementById('usedValue').innerHTML = `${usedGB} <span style="color: #ffff99; font-size: 10px;">G</span>`;
+      
+      progressBar.style.width = `${usedPercentage}%`;
+      setRemainingValueColor(remainingPercentage);
+      
+      if (data.expiretime) {
+        const expireDate = data.expiretime.split(' ')[0];
+        expireTimeElement.textContent = `到期时间: ${expireDate}`;
+      }
+      
+      if (data.description === '该卡状态正常') {
+        statusElement.textContent = '状态正常';
+        statusElement.style.backgroundColor = '#e6f7ff';
+        statusElement.style.color = '#0099ff';
+      } else {
+        statusElement.textContent = '状态异常';
+        statusElement.style.backgroundColor = '#fff2f0';
+        statusElement.style.color = '#ff4d4f';
+      }
+    } else {
+      statusElement.textContent = '查询失败';
+      statusElement.style.backgroundColor = '#fff2f0';
+      statusElement.style.color = '#ff4d4f';
+      expireTimeElement.textContent = '到期时间: --';
+      progressBar.style.width = '0%';
+      document.getElementById('remainingValue').style.color = '#33ffff';
+    }
+    
+    updateRefreshTime();
+    setTimeout(fetchTrafficData, 30 * 60 * 1000);
+  };
+
+  trafficCard.addEventListener('click', fetchTrafficData);
+  fetchTrafficData();
+})();
+</script>

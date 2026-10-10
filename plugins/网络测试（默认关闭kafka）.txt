@@ -1,0 +1,571 @@
+[file name]: 网络延迟（卡fk）.txt
+[file content begin]
+<script>
+(() => {
+    // 创建插件容器
+    const container = document.querySelector('.functions-container');
+    container.insertAdjacentHTML("afterend", `
+<div id="STREAMING_TEST" style="width: 100%; margin-top: 10px;">
+    <div class="title" style="margin: 6px 0; color: #fff; display: flex; align-items: center; gap: 15px;">
+        <strong style="color:#fff;">📊 服务连通性测试</strong>
+        <div style="display: inline-block;" id="collapse_btn_streaming"></div>
+        <button id="single_test_btn" class="btn" style="margin-left: 10px; padding: 4px 6px; font-size: 12px;">单次检测</button>
+        <button id="toggle_monitor_btn" class="btn" style="margin-left: 5px; padding: 4px 6px; font-size: 12px; background: #666;">开始监控</button>
+    </div>
+    <div class="collapse" id="collapse_streaming" data-name="close" style="height: 0px; overflow: hidden;">
+        <div class="collapse_box">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <!-- 小红书 -->
+                <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 3px solid #ff2442;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="font-weight: bold; color: #ff2442; font-size: 13px;">📕 小红书</div>
+                        <div id="quality_1" style="font-size: 10px; padding: 2px 6px; border-radius: 8px; background: #666; color: white;">未检测</div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 10px; color: #ccc;">延迟</div>
+                            <div id="ping1_icmp" style="font-size: 14px; font-weight: bold; color: #666;">-</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 10px; color: #ccc;">丢包率</div>
+                            <div id="loss1_icmp" style="font-size: 14px; font-weight: bold; color: #666;">-</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <div id="status_dots_1_icmp" style="display: flex; gap: 1px; align-items: center; min-width: 100px; height: 8px; overflow: hidden;"></div>
+                        <div style="font-size: 9px; color: #ccc;">均:<span id="avg_1_icmp" style="color:#666;">-</span></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 9px;">
+                        <span style="color:#ccc;">稳定性:</span>
+                        <span id="stability_1" style="color:#666;">-</span>
+                    </div>
+                </div>
+                
+                <!-- Bilibili -->
+                <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 3px solid #00a1d6;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="font-weight: bold; color: #00a1d6; font-size: 13px;">📺 B站</div>
+                        <div id="quality_2" style="font-size: 10px; padding: 2px 6px; border-radius: 8px; background: #666; color: white;">未检测</div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 10px; color: #ccc;">延迟</div>
+                            <div id="ping2_icmp" style="font-size: 14px; font-weight: bold; color: #666;">-</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 10px; color: #ccc;">丢包率</div>
+                            <div id="loss2_icmp" style="font-size: 14px; font-weight: bold; color: #666;">-</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <div id="status_dots_2_icmp" style="display: flex; gap: 1px; align-items: center; min-width: 100px; height: 8px; overflow: hidden;"></div>
+                        <div style="font-size: 9px; color: #ccc;">均:<span id="avg_2_icmp" style="color:#666;">-</span></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 9px;">
+                        <span style="color:#ccc;">稳定性:</span>
+                        <span id="stability_2" style="color:#666;">-</span>
+                    </div>
+                </div>
+                
+                <!-- 王者荣耀 -->
+                <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 3px solid #ff8a00;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="font-weight: bold; color: #ff8a00; font-size: 13px;">🎮 王者</div>
+                        <div id="quality_3" style="font-size: 10px; padding: 2px 6px; border-radius: 8px; background: #666; color: white;">未检测</div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 10px; color: #ccc;">延迟</div>
+                            <div id="ping3_icmp" style="font-size: 14px; font-weight: bold; color: #666;">-</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 10px; color: #ccc;">丢包率</div>
+                            <div id="loss3_icmp" style="font-size: 14px; font-weight: bold; color: #666;">-</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <div id="status_dots_3_icmp" style="display: flex; gap: 1px; align-items: center; min-width: 100px; height: 8px; overflow: hidden;"></div>
+                        <div style="font-size: 9px; color: #ccc;">均:<span id="avg_3_icmp" style="color:#666;">-</span></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 9px;">
+                        <span style="color:#ccc;">稳定性:</span>
+                        <span id="stability_3" style="color:#666;">-</span>
+                    </div>
+                </div>
+                
+                <!-- 和平精英 -->
+                <div style="padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 3px solid #4caf50;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="font-weight: bold; color: #4caf50; font-size: 13px;">🔫 和平</div>
+                        <div id="quality_4" style="font-size: 10px; padding: 2px 6px; border-radius: 8px; background: #666; color: white;">未检测</div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 10px; color: #ccc;">延迟</div>
+                            <div id="ping4_icmp" style="font-size: 14px; font-weight: bold; color: #666;">-</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 10px; color: #ccc;">丢包率</div>
+                            <div id="loss4_icmp" style="font-size: 14px; font-weight: bold; color: #666;">-</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <div id="status_dots_4_icmp" style="display: flex; gap: 1px; align-items: center; min-width: 100px; height: 8px; overflow: hidden;"></div>
+                        <div style="font-size: 9px; color: #ccc;">均:<span id="avg_4_icmp" style="color:#666;">-</span></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 9px;">
+                        <span style="color:#ccc;">稳定性:</span>
+                        <span id="stability_4" style="color:#666;">-</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 图例说明 -->
+            <div style="margin-top: 12px; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px; font-size: 10px; color: #ccc;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span>网络质量: <span style="color:#2196F3;">极速</span> → <span style="color:#4CAF50;">流畅</span> → <span style="color:#FFC107;">一般</span> → <span style="color:#FF9800;">缓慢</span> → <span style="color:#f44336;">阻塞</span></span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>游戏延迟 &lt;50ms优秀, &lt;100ms良好</span>
+                    <span>流媒体延迟 &lt;80ms优秀, &lt;150ms良好</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+`);
+
+    // 配置常量
+    const CONFIG = {
+        MAX_DOTS: 15, // 减少点数使区域更紧凑
+        MAX_HISTORY: 30,
+        MONITOR_INTERVAL: 15000,
+        PING_TIMEOUT: 5000,
+        COLORS: {
+            SUCCESS: '#4CAF50',
+            WARNING: '#FF9800', 
+            ERROR: '#f44336',
+            PENDING: '#666'
+        }
+    };
+
+    // 服务测试数据
+    const streamingData = {
+        targets: [
+            { name: "小红书", host: "www.xiaohongshu.com", id: 1, type: "streaming", color: "#ff2442" },
+            { name: "Bilibili", host: "www.bilibili.com", id: 2, type: "streaming", color: "#00a1d6" },
+            { name: "王者荣耀", host: "pvp.qq.com", id: 3, type: "game", color: "#ff8a00" },
+            { name: "和平精英", host: "gp.qq.com", id: 4, type: "game", color: "#4caf50" }
+        ],
+        history: new Map(),
+        monitoring: false, // 改为默认不启动监控
+        monitorInterval: null,
+        elements: new Map()
+    };
+
+    // 初始化历史数据结构
+    streamingData.targets.forEach(target => {
+        streamingData.history.set(`${target.id}_icmp`, []);
+    });
+
+    // 简化的日志函数
+    const showToastLog = (message) => console.log(`[服务连通性测试] ${message}`);
+
+    /**
+     * 获取网络质量形容词和颜色
+     */
+    const getNetworkQuality = (latency, lossRate, serviceType) => {
+        // 游戏服务使用更严格的标准
+        const latencyThresholds = serviceType === "game" ? 
+            { excellent: 30, good: 60, fair: 100, poor: 150 } :
+            { excellent: 50, good: 100, fair: 200, poor: 300 };
+            
+        // 丢包率阈值
+        const lossThresholds = { excellent: 0, good: 2, fair: 5, poor: 10 };
+        
+        let quality, color;
+        
+        if (lossRate > lossThresholds.poor || latency > latencyThresholds.poor) {
+            quality = "阻塞";
+            color = CONFIG.COLORS.ERROR;
+        } else if (lossRate > lossThresholds.fair || latency > latencyThresholds.fair) {
+            quality = "缓慢";
+            color = CONFIG.COLORS.WARNING;
+        } else if (lossRate > lossThresholds.good || latency > latencyThresholds.good) {
+            quality = "一般";
+            color = "#FFC107";
+        } else if (lossRate > lossThresholds.excellent || latency > latencyThresholds.excellent) {
+            quality = "流畅";
+            color = CONFIG.COLORS.SUCCESS;
+        } else {
+            quality = "极速";
+            color = "#2196F3";
+        }
+        
+        return { quality, color };
+    };
+
+    /**
+     * 获取稳定性评级
+     */
+    const getStabilityRating = (history) => {
+        if (!history || history.length < 5) return "检测中";
+        
+        const successfulPings = history.filter(r => r.success && r.time !== null);
+        if (successfulPings.length < 3) return "不稳定";
+        
+        const times = successfulPings.map(r => r.time);
+        const avg = times.reduce((a, b) => a + b) / times.length;
+        const variance = times.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / times.length;
+        const stdDev = Math.sqrt(variance);
+        
+        // 标准差小于平均值的10%为非常稳定
+        if (stdDev < avg * 0.1) return "极稳";
+        // 标准差小于平均值的20%为稳定
+        if (stdDev < avg * 0.2) return "稳定";
+        // 标准差小于平均值的35%为一般
+        if (stdDev < avg * 0.35) return "一般";
+        
+        return "波动";
+    };
+
+    /**
+     * ICMP Ping 函数
+     */
+    const pingICMP = async (host) => {
+        try {
+            const timeout = CONFIG.PING_TIMEOUT / 1000;
+            const result = await runShellWithRoot(`ping -c 1 -W ${timeout} ${host}`);
+            
+            if (result?.content) {
+                const timeMatch = result.content.match(/time=([0-9.]+)\s*ms/);
+                if (timeMatch) {
+                    return { success: true, time: parseFloat(timeMatch[1]) };
+                }
+                if (result.content.includes("100% packet loss")) {
+                    return { success: false, time: null, error: "完全丢包" };
+                }
+            }
+            return { success: false, time: null, error: "无响应" };
+        } catch (error) {
+            return { success: false, time: null, error: error.message };
+        }
+    };
+
+    /**
+     * 更新历史数据
+     */
+    const updateHistory = (historyKey, result) => {
+        const history = streamingData.history.get(historyKey);
+        history.push(result);
+        if (history.length > CONFIG.MAX_HISTORY) {
+            history.shift();
+        }
+    };
+
+    /**
+     * 获取延迟对应的颜色
+     */
+    const getLatencyColor = (time, serviceType = "streaming") => {
+        const thresholds = serviceType === "game" ? 
+            { GOOD: 50, WARNING: 100 } : { GOOD: 80, WARNING: 150 };
+        
+        if (time < thresholds.GOOD) return CONFIG.COLORS.SUCCESS;
+        if (time < thresholds.WARNING) return CONFIG.COLORS.WARNING;
+        return CONFIG.COLORS.ERROR;
+    };
+
+    /**
+     * 获取丢包率对应的颜色
+     */
+    const getLossColor = (lossRate) => {
+        if (lossRate === 0) return CONFIG.COLORS.SUCCESS;
+        if (lossRate < 5) return CONFIG.COLORS.WARNING;
+        return CONFIG.COLORS.ERROR;
+    };
+
+    /**
+     * 获取或缓存DOM元素
+     */
+    const getElement = (id) => {
+        if (!streamingData.elements.has(id)) {
+            streamingData.elements.set(id, document.getElementById(id));
+        }
+        return streamingData.elements.get(id);
+    };
+
+    /**
+     * 计算并更新平均延迟显示
+     */
+    const updateAverageDisplay = (targetId) => {
+        const historyKey = `${targetId}_icmp`;
+        const history = streamingData.history.get(historyKey);
+        const avgElement = getElement(`avg_${targetId}_icmp`);
+        
+        if (!avgElement || !history?.length) return;
+        
+        const successfulPings = history.filter(r => r.success && r.time !== null);
+        if (successfulPings.length > 0) {
+            const avgTime = successfulPings.reduce((sum, r) => sum + r.time, 0) / successfulPings.length;
+            avgElement.textContent = `${avgTime.toFixed(0)}ms`;
+            
+            const targetService = streamingData.targets.find(t => t.id === targetId);
+            const serviceType = targetService ? targetService.type : "streaming";
+            
+            avgElement.style.color = getLatencyColor(avgTime, serviceType);
+        } else {
+            avgElement.textContent = '-';
+            avgElement.style.color = CONFIG.COLORS.ERROR;
+        }
+    };
+
+    /**
+     * 更新延迟显示
+     */
+    const updateLatencyDisplay = (targetId, result) => {
+        const element = getElement(`ping${targetId}_icmp`);
+        if (!element) return;
+        
+        if (result.success) {
+            element.textContent = `${result.time.toFixed(0)}ms`;
+            
+            const targetService = streamingData.targets.find(t => t.id === targetId);
+            const serviceType = targetService ? targetService.type : "streaming";
+            
+            element.style.color = getLatencyColor(result.time, serviceType);
+        } else {
+            element.textContent = '超时';
+            element.style.color = CONFIG.COLORS.ERROR;
+        }
+    };
+
+    /**
+     * 更新丢包率显示
+     */
+    const updateLossDisplay = (targetId) => {
+        const historyKey = `${targetId}_icmp`;
+        const history = streamingData.history.get(historyKey);
+        const element = getElement(`loss${targetId}_icmp`);
+        
+        if (!element || !history?.length) return 0;
+        
+        const lossRate = ((history.filter(r => !r.success).length / history.length) * 100).toFixed(0);
+        element.textContent = `${lossRate}%`;
+        element.style.color = getLossColor(parseFloat(lossRate));
+        
+        return parseFloat(lossRate);
+    };
+
+    /**
+     * 更新网络质量显示
+     */
+    const updateQualityDisplay = (targetId, latency, lossRate) => {
+        const element = getElement(`quality_${targetId}`);
+        if (!element) return;
+        
+        const targetService = streamingData.targets.find(t => t.id === targetId);
+        const serviceType = targetService ? targetService.type : "streaming";
+        
+        const { quality, color } = getNetworkQuality(latency, lossRate, serviceType);
+        
+        element.textContent = quality;
+        element.style.background = color;
+    };
+
+    /**
+     * 更新稳定性显示
+     */
+    const updateStabilityDisplay = (targetId) => {
+        const element = getElement(`stability_${targetId}`);
+        if (!element) return;
+        
+        const historyKey = `${targetId}_icmp`;
+        const history = streamingData.history.get(historyKey);
+        
+        const stability = getStabilityRating(history);
+        element.textContent = stability;
+        
+        // 设置稳定性颜色
+        if (stability === "极稳") element.style.color = "#2196F3";
+        else if (stability === "稳定") element.style.color = CONFIG.COLORS.SUCCESS;
+        else if (stability === "一般") element.style.color = CONFIG.COLORS.WARNING;
+        else element.style.color = CONFIG.COLORS.ERROR;
+    };
+
+    /**
+     * 创建状态点元素
+     */
+    const createStatusDot = (backgroundColor = CONFIG.COLORS.PENDING, title = '未检测') => {
+        const dot = document.createElement('div');
+        dot.className = 'status-dot';
+        dot.style.cssText = `
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background-color: ${backgroundColor};
+            flex-shrink: 0;
+        `;
+        dot.title = title;
+        return dot;
+    };
+
+    /**
+     * 初始化状态点图
+     */
+    const initializeStatusDots = (targetId) => {
+        const dotsContainer = getElement(`status_dots_${targetId}_icmp`);
+        if (!dotsContainer) return;
+        
+        const fragment = document.createDocumentFragment();
+        for (let i = 0; i < CONFIG.MAX_DOTS; i++) {
+            fragment.appendChild(createStatusDot());
+        }
+        
+        dotsContainer.innerHTML = '';
+        dotsContainer.appendChild(fragment);
+    };
+
+    /**
+     * 更新状态点图显示
+     */
+    const updateStatusDots = (targetId, result) => {
+        const dotsContainer = getElement(`status_dots_${targetId}_icmp`);
+        if (!dotsContainer) return;
+        
+        const dots = dotsContainer.children;
+        let targetDot = null;
+        
+        for (const dot of dots) {
+            const bgColor = dot.style.backgroundColor;
+            if (bgColor === 'rgb(102, 102, 102)' || bgColor === CONFIG.COLORS.PENDING) {
+                targetDot = dot;
+                break;
+            }
+        }
+        
+        if (!targetDot) {
+            dotsContainer.removeChild(dots[0]);
+            targetDot = createStatusDot();
+            dotsContainer.appendChild(targetDot);
+        }
+        
+        if (result.success) {
+            const targetService = streamingData.targets.find(t => t.id === targetId);
+            const serviceType = targetService ? targetService.type : "streaming";
+            
+            targetDot.style.backgroundColor = getLatencyColor(result.time, serviceType);
+            targetDot.title = `${result.time.toFixed(0)}ms`;
+        } else {
+            targetDot.style.backgroundColor = CONFIG.COLORS.ERROR;
+            targetDot.title = '超时';
+        }
+        
+        dotsContainer.scrollLeft = dotsContainer.scrollWidth;
+    };
+
+    /**
+     * 执行单个服务检测
+     */
+    const testTarget = async (target) => {
+        const result = await pingICMP(target.host);
+        updateHistory(`${target.id}_icmp`, result);
+        updateStatusDots(target.id, result);
+        
+        // 更新显示
+        updateLatencyDisplay(target.id, result);
+        const lossRate = updateLossDisplay(target.id);
+        updateAverageDisplay(target.id);
+        updateStabilityDisplay(target.id);
+        
+        // 计算平均延迟用于质量评估
+        const historyKey = `${target.id}_icmp`;
+        const history = streamingData.history.get(historyKey);
+        const successfulPings = history.filter(r => r.success && r.time !== null);
+        
+        if (successfulPings.length > 0) {
+            const avgLatency = successfulPings.reduce((sum, r) => sum + r.time, 0) / successfulPings.length;
+            updateQualityDisplay(target.id, avgLatency, lossRate || 0);
+        } else {
+            updateQualityDisplay(target.id, 999, 100); // 表示连接失败
+        }
+    };
+
+    /**
+     * 执行所有服务检测
+     */
+    const performStreamingTest = async () => {
+        await Promise.all(streamingData.targets.map(testTarget));
+    };
+
+    /**
+     * 更新监控按钮状态
+     */
+    const updateMonitorButton = (isMonitoring) => {
+        const toggleBtn = getElement('toggle_monitor_btn');
+        if (!toggleBtn) return;
+        
+        toggleBtn.textContent = isMonitoring ? '监控中' : '开始监控';
+        toggleBtn.style.background = isMonitoring ? CONFIG.COLORS.SUCCESS : '#666';
+    };
+
+    /**
+     * 开始监控
+     */
+    const startMonitoring = () => {
+        if (streamingData.monitorInterval) {
+            clearInterval(streamingData.monitorInterval);
+        }
+        
+        streamingData.monitoring = true;
+        streamingData.monitorInterval = setInterval(performStreamingTest, CONFIG.MONITOR_INTERVAL);
+        updateMonitorButton(true);
+        
+        performStreamingTest();
+    };
+
+    /**
+     * 停止监控
+     */
+    const stopMonitoring = () => {
+        if (streamingData.monitorInterval) {
+            clearInterval(streamingData.monitorInterval);
+            streamingData.monitorInterval = null;
+        }
+        
+        streamingData.monitoring = false;
+        updateMonitorButton(false);
+    };
+
+    /**
+     * 初始化事件监听器
+     */
+    const initEventListeners = () => {
+        const singleTestBtn = getElement('single_test_btn');
+        const toggleMonitorBtn = getElement('toggle_monitor_btn');
+        
+        singleTestBtn?.addEventListener('click', performStreamingTest);
+        toggleMonitorBtn?.addEventListener('click', () => {
+            streamingData.monitoring ? stopMonitoring() : startMonitoring();
+        });
+    };
+
+    /**
+     * 初始化插件
+     */
+    const init = () => {
+        [1, 2, 3, 4].forEach(targetId => {
+            initializeStatusDots(targetId);
+        });
+        
+        initEventListeners();
+        
+        // 移除自动启动监控，改为默认不启动
+        updateMonitorButton(false);
+    };
+
+    // 初始化折叠面板和插件
+    collapseGen("#collapse_btn_streaming", "#collapse_streaming", "#collapse_streaming", () => {});
+    setTimeout(init, 300);
+})();
+</script>
+[file content end]

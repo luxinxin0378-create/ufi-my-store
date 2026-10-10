@@ -1,0 +1,9 @@
+<script>
+const ocreateToast = createToast
+createToast = (...args)=>{
+    if(args[0] == t('not_support_firmware')){
+        return
+    }
+    ocreateToast && ocreateToast(...args)
+}
+</script>

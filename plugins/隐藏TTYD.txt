@@ -1,0 +1,9 @@
+<script>
+    (() => {
+        const port = localStorage.getItem('ttyd_port')
+        if (port != '65533') {
+            localStorage.setItem('ttyd_port', '65533')
+            initTTYD && initTTYD()
+        }
+    })()
+</script>

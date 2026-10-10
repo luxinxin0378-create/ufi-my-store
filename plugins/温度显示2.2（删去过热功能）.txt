@@ -1,0 +1,332 @@
+//<script>
+(() => {
+    // 创建温度监测容器 - 优化布局
+    const container = document.querySelector('.functions-container');
+    container.insertAdjacentHTML("afterend", `
+<div id="TEMPERATURE_MONITOR" style="width: 100%; margin-top: 8px;">
+    <div class="title" style="margin: 4px 0; color: #fff; display: flex; align-items: center; gap: 10px;">
+        <strong style="color:#fff; font-size: 13px;">🌡️ 实时温度监测</strong>
+        <div style="display: inline-block;" id="collapse_btn_temperature"></div>
+        <!-- 按钮放在右侧但不超出屏幕 -->
+        <div style="margin-left: auto; display: flex; gap: 4px; flex-shrink: 0;">
+            <button id="refresh_temp_btn" class="btn" style="padding: 3px 6px; font-size: .77rem;">刷新</button>
+            <button id="toggle_temp_monitor_btn" class="btn" style="padding: 3px 6px; font-size: .77rem; background: #4CAF50;">实时</button>
+        </div>
+    </div>
+    <div class="collapse" id="collapse_temperature" data-name="close" style="height: 0px; overflow: hidden;">
+        <div class="collapse_box" style="padding:6px;backdrop-filter: blur(20px);-webkit-backdrop-filter: blur(20px);background: var(--dark-card-bg); border-radius: 10px;">
+            <!-- 温度仪表盘 -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 12px; border-radius: 12px; ">
+                <!-- 左侧温度显示 -->
+                <div style="text-align: center; flex: 1;">
+                    <div style="font-size: .77rem; color: var(--dark-text-color); margin-bottom: 4px;">当前温度</div>
+                    <div id="current_temp_display" style="font-size: 42px; font-weight: bold; color: #4CAF50; text-shadow: 0 0 10px rgba(76, 175, 80, 0.3);">--</div>
+                    <div style="font-size: .77rem; color: var(--dark-text-color); margin-top: 4px;">°C</div>
+                </div>
+                
+                <!-- 右侧状态指示 -->
+                <div style="flex: 1; text-align: center;">
+                    <div style="font-size: .77rem; color: var(--dark-text-color); margin-bottom: 8px;">设备状态</div>
+                    <div id="temp_status_indicator" style="width: 60px; height: 60px; margin: 0 auto; border-radius: 50%; background: conic-gradient(#4CAF50 0%, #666 0%); display: flex; align-items: center; justify-content: center; position: relative;">
+                        <div style="width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .77rem; color: #fff; font-weight: bold;">
+                            <span id="temp_status_text">正常</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 温度趋势图和实时数据并排 -->
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 12px;">
+                <!-- 左侧：温度趋势图 -->
+                <div style="border: 1px solid #0080002b;background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; ">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="font-size: .77rem; color: var(--dark-text-color); font-weight: bold;">📈 温度趋势</div>
+                        <div style="font-size: .64rem; color: var(--dark-text-color);">最近 <span id="trend_count">0</span> 次记录</div>
+                    </div>
+                    <div id="temp_trend_chart" style="height: 60px; display: flex; align-items: end; gap: 3px; padding: 4px 0;">
+                        <!-- 动态生成的柱状图 -->
+                    </div>
+                </div>
+
+                <!-- 右侧：实时数据 -->
+                <div style="border: 1px solid #0080002b;background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px; ">
+                    <div style="font-size: .77rem; color: var(--dark-text-color); font-weight: bold; margin-bottom: 10px;">📊 实时数据</div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: .77rem; color: var(--dark-text-color);">最高温度:</span>
+                            <span id="max_temp_display" style="font-size: 12px; font-weight: bold; color: #ff6b6b;">--°C</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: .77rem; color: var(--dark-text-color);">平均温度:</span>
+                            <span id="avg_temp_display" style="font-size: 12px; font-weight: bold; color: #4ecdc4;">--°C</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: .77rem; color: var(--dark-text-color);">温度趋势:</span>
+                            <span id="temp_trend_display" style="font-size: 12px; font-weight: bold; color: #45b7d1;">--</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: .77rem; color: var(--dark-text-color);">传感器:</span>
+                            <span id="sensor_count_display" style="font-size: 12px; font-weight: bold; color: #96ceb4;">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 温度状态说明卡片 -->
+            <div style="padding: 10px; border-radius: 8px; border: 1px solid #0080002b; ">
+                <div style="font-size: .77rem; color: var(--dark-text-color); line-height: 1.4;">
+                    <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+                        <strong style="color: #4CAF50;">📊 温度状态说明：</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: #4CAF50;">正常: &lt;50°C</span>
+                        <span style="color: #FFC107;">注意: 50-70°C</span>
+                        <span style="color: #FF9800;">警告: 70-85°C</span>
+                        <span style="color: #f44336;">危险: ≥85°C</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+`);
+
+    // 配置常量
+    const TEMP_CONFIG = {
+        MAX_HISTORY: 20,
+        MONITOR_INTERVAL: 1000, // 1秒更新一次
+        TEMP_THRESHOLDS: {
+            NORMAL: 50,
+            WARNING: 70,
+            DANGER: 85
+        },
+        COLORS: {
+            NORMAL: '#4CAF50',
+            WARNING: '#FFC107',
+            DANGER: '#FF9800',
+            CRITICAL: '#f44336'
+        }
+    };
+
+    // 温度监测数据
+    const tempData = {
+        history: [],
+        monitoring: false,
+        monitorInterval: null,
+        maxTemp: 0,
+        elements: new Map()
+    };
+
+    // 获取或缓存DOM元素
+    const getTempElement = (id) => {
+        if (!tempData.elements.has(id)) {
+            tempData.elements.set(id, document.getElementById(id));
+        }
+        return tempData.elements.get(id);
+    };
+
+    // 获取设备温度
+    const getDeviceTemperature = async () => {
+        try {
+            return {
+                success: true,
+                currentTemp: UFI_DATA && (UFI_DATA.cpu_temp / 1000),
+                sensorCount: parseInt(UFI_DATA && UFI_DATA.cpu_temp_list.length)
+            }
+        } catch (error) {
+            return { error: '无法获取温度数据' };
+        }
+    };
+
+    // 获取温度状态
+    const getTempStatus = (temp) => {
+        if (temp < TEMP_CONFIG.TEMP_THRESHOLDS.NORMAL) {
+            return {
+                status: '正常',
+                color: TEMP_CONFIG.COLORS.NORMAL,
+                percentage: (temp / TEMP_CONFIG.TEMP_THRESHOLDS.NORMAL) * 100
+            };
+        } else if (temp < TEMP_CONFIG.TEMP_THRESHOLDS.WARNING) {
+            return {
+                status: '注意',
+                color: TEMP_CONFIG.COLORS.WARNING,
+                percentage: 50 + ((temp - TEMP_CONFIG.TEMP_THRESHOLDS.NORMAL) / (TEMP_CONFIG.TEMP_THRESHOLDS.WARNING - TEMP_CONFIG.TEMP_THRESHOLDS.NORMAL)) * 50
+            };
+        } else if (temp < TEMP_CONFIG.TEMP_THRESHOLDS.DANGER) {
+            return {
+                status: '警告',
+                color: TEMP_CONFIG.COLORS.DANGER,
+                percentage: 75 + ((temp - TEMP_CONFIG.TEMP_THRESHOLDS.WARNING) / (TEMP_CONFIG.TEMP_THRESHOLDS.DANGER - TEMP_CONFIG.TEMP_THRESHOLDS.WARNING)) * 25
+            };
+        } else {
+            return {
+                status: '危险',
+                color: TEMP_CONFIG.COLORS.CRITICAL,
+                percentage: 100
+            };
+        }
+    };
+
+    // 更新温度趋势图
+    const updateTrendChart = (history) => {
+        const chartContainer = getTempElement('temp_trend_chart');
+        if (!chartContainer || !history.length) return;
+
+        // 只显示最近的数据
+        const recentHistory = history.slice(-16); // 增加显示数量
+        const maxTempInChart = Math.max(...recentHistory.map(h => h.temp));
+        const minTempInChart = Math.min(...recentHistory.map(h => h.temp));
+        const tempRange = Math.max(maxTempInChart - minTempInChart, 10); // 避免除零
+
+        chartContainer.innerHTML = '';
+
+        recentHistory.forEach((record, index) => {
+            const barHeight = ((record.temp - minTempInChart) / tempRange) * 50 + 10; // 增加高度范围
+            const status = getTempStatus(record.temp);
+
+            const bar = document.createElement('div');
+            bar.style.cssText = `
+                width: 5px;
+                height: ${barHeight}px;
+                background: ${status.color};
+                border-radius: 2px;
+                transition: all 0.3s ease;
+                opacity: ${index === recentHistory.length - 1 ? 1 : 0.7};
+                box-shadow: 0 0 4px ${status.color}40;
+                flex: 1;
+                min-width: 0;
+            `;
+            bar.title = `${record.temp.toFixed(1)}°C`;
+
+            chartContainer.appendChild(bar);
+        });
+
+        getTempElement('trend_count').textContent = recentHistory.length;
+    };
+
+    // 计算温度趋势
+    const calculateTrend = (history) => {
+        if (history.length < 3) return '稳定';
+
+        const recent = history.slice(-3);
+        const trend = recent[2].temp - recent[0].temp;
+
+        if (trend > 1) return '上升 ↗';
+        if (trend < -1) return '下降 ↘';
+        return '稳定 →';
+    };
+
+    // 更新温度显示
+    const updateTemperatureDisplay = async () => {
+        const tempInfo = await getDeviceTemperature();
+
+        if (tempInfo.error) {
+            if (!tempData.monitoring) {
+                createToast(tempInfo.error, 'red');
+            }
+            return;
+        }
+
+        if (tempInfo.success) {
+            const currentTemp = tempInfo.currentTemp;
+
+            // 更新历史数据
+            tempData.history.push({
+                temp: currentTemp,
+                timestamp: Date.now()
+            });
+
+            if (tempData.history.length > TEMP_CONFIG.MAX_HISTORY) {
+                tempData.history.shift();
+            }
+
+            // 更新最高温度
+            if (currentTemp > tempData.maxTemp) {
+                tempData.maxTemp = currentTemp;
+            }
+
+            // 获取温度状态
+            const status = getTempStatus(currentTemp);
+
+            // 更新主温度显示
+            getTempElement('current_temp_display').textContent = currentTemp.toFixed(1);
+            getTempElement('current_temp_display').style.color = status.color;
+            getTempElement('current_temp_display').style.textShadow = `0 0 10px ${status.color}40`;
+
+            // 更新状态指示器
+            getTempElement('temp_status_text').textContent = status.status;
+            getTempElement('temp_status_indicator').style.background =
+                `conic-gradient(${status.color} 0% ${status.percentage}%, #3333330e ${status.percentage}% 100%)`;
+
+            // 更新统计信息
+            getTempElement('max_temp_display').textContent = `${tempData.maxTemp.toFixed(1)}°C`;
+
+            const avgTemp = tempData.history.reduce((sum, h) => sum + h.temp, 0) / tempData.history.length;
+            getTempElement('avg_temp_display').textContent = `${avgTemp.toFixed(1)}°C`;
+
+            getTempElement('temp_trend_display').textContent = calculateTrend(tempData.history);
+            getTempElement('sensor_count_display').textContent = tempInfo.sensorCount;
+
+            // 更新趋势图
+            updateTrendChart(tempData.history);
+        }
+    };
+
+    // 更新监控按钮状态
+    const updateMonitorButton = (isMonitoring) => {
+        const toggleBtn = getTempElement('toggle_temp_monitor_btn');
+        if (!toggleBtn) return;
+
+        toggleBtn.textContent = isMonitoring ? '监控中' : '实时';
+        toggleBtn.style.background = isMonitoring ? TEMP_CONFIG.COLORS.WARNING : TEMP_CONFIG.COLORS.NORMAL;
+    };
+
+    // 开始温度监控
+    const startTempMonitoring = () => {
+        if (tempData.monitorInterval) {
+            clearInterval(tempData.monitorInterval);
+        }
+
+        tempData.monitoring = true;
+        tempData.monitorInterval = setInterval(updateTemperatureDisplay, TEMP_CONFIG.MONITOR_INTERVAL);
+        updateMonitorButton(true);
+
+        // 立即执行一次更新
+        updateTemperatureDisplay();
+    };
+
+    // 停止温度监控
+    const stopTempMonitoring = () => {
+        if (tempData.monitorInterval) {
+            clearInterval(tempData.monitorInterval);
+            tempData.monitorInterval = null;
+        }
+
+        tempData.monitoring = false;
+        updateMonitorButton(false);
+    };
+
+    // 初始化事件监听器
+    const initTempEventListeners = () => {
+        const refreshBtn = getTempElement('refresh_temp_btn');
+        const toggleMonitorBtn = getTempElement('toggle_temp_monitor_btn');
+
+        refreshBtn?.addEventListener('click', updateTemperatureDisplay);
+        toggleMonitorBtn?.addEventListener('click', () => {
+            tempData.monitoring ? stopTempMonitoring() : startTempMonitoring();
+        });
+    };
+
+    // 初始化温度监测
+    const initTemperatureMonitor = () => {
+        initTempEventListeners();
+
+        // 默认启动监控
+        startTempMonitoring();
+    };
+
+    // 初始化折叠面板和插件
+    collapseGen("#collapse_btn_temperature", "#collapse_temperature", "#collapse_temperature", () => { });
+    setTimeout(initTemperatureMonitor, 300);
+})();
+//</script>

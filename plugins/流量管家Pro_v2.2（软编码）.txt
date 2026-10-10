@@ -1,0 +1,1002 @@
+<script>
+(() => {
+  const BRAND_CONFIG = {
+    overview: { key: 'sys_overview', name: '全局概览', label: '概览', type: 'system', icon: 'Dashboard', gradient: 'linear-gradient(135deg, #6366f1, #8b5cf6)' },
+    obn: { key: 'obn_card_number', name: '欧本', label: '充值号', defaultVal: '无', type: 'obn', icon: 'Sim', gradient: 'linear-gradient(135deg, #f59e0b, #ea580c)' },
+    xj: { key: 'xj_card_numbers', name: '新版小鲸', label: '卡号', defaultVal: '无', type: 'xj', icon: 'Sim', gradient: 'linear-gradient(135deg, #f97316, #c2410c)' },
+    old_xj: { key: 'old_xj_card_numbers', name: '老版小鲸', label: '卡号', defaultVal: '无', type: 'old_xj', icon: 'Sim', gradient: 'linear-gradient(135deg, #ef4444, #b91c1c)' },
+    qilianmao: { key: 'qilianmao_card_numbers', name: '企联猫', label: '充值号', defaultVal: '无', type: 'qilianmao', icon: 'Sim', gradient: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' },
+    zimu: { key: 'zimu_card_numbers', name: '字母哥', label: '卡号', defaultVal: '无', type: 'zimu', icon: 'Sim', gradient: 'linear-gradient(135deg, #ec4899, #be185d)' },
+    yunshang: { key: 'yunshang_card_numbers', name: '云上', label: '卡号', defaultVal: '无', type: 'yunshang', icon: 'Sim', gradient: 'linear-gradient(135deg, #06b6d4, #0e7490)' },
+    feimao: { key: 'feimao_control', name: '飞猫智联', label: '本机', defaultVal: '本机', type: 'feimao', icon: 'Router', gradient: 'linear-gradient(135deg, #f59e0b, #d97706)' }
+  };
+
+  const SETTINGS_KEY = 'tm_settings_v40'; 
+  const ORDER_KEY = 'tm_menu_order_v32'; 
+  const COLLAPSE_KEY = 'tm_collapse_status';
+  const FM_COLLAPSE_KEY = 'tm_fm_collapse_status'; 
+  const VIEW_KEY = 'tm_current_view';
+  const DATA_CACHE_KEY = 'tm_data_cache_v1';
+  
+  let GlobalDataCache = {};
+  try { GlobalDataCache = JSON.parse(localStorage.getItem(DATA_CACHE_KEY)) || {}; } catch (e) { GlobalDataCache = {}; }
+
+  const AnimationRegistry = {};
+  
+  let ViewState = { 
+      currentView: localStorage.getItem(VIEW_KEY) || 'overview', 
+      groupIndices: {},
+      activeGroups: [] 
+  };
+  let activeFeimaoNet = '';
+
+  const Icons = {
+      Menu: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>`,
+      Dashboard: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="14" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect></svg>`,
+      Sim: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l5 5v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"></path><path d="M10 10h4"></path><path d="M10 14h4"></path><path d="M10 18h4"></path></svg>`,
+      Router: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>`,
+      Refresh: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg>`,
+      Eye: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>`,
+      EyeOff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" y1="2" x2="22" y2="22"></line></svg>`,
+      Signal: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h.01"></path><path d="M7 20v-4"></path><path d="M12 20v-8"></path><path d="M17 20V8"></path><path d="M22 20V4"></path></svg>`,
+      Edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`,
+      Trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`,
+      Plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`,
+      PieChart: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>`,
+      TrendingUp: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>`,
+      Activity: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>`,
+      Smartphone: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>`,
+      Loading: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>`,
+      Mobile: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>`,
+      ChevronUp: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`,
+      Check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
+      Drag: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>`
+  };
+
+  const style = document.createElement('style');
+  style.textContent = `
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800&display=swap');
+    #TM_CONTAINER, #TM_CONTAINER * { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important; box-sizing: border-box; }
+    #TM_CONTAINER { width: 100%; margin: 10px 0; display: flex; flex-direction: column; position: relative; gap: 0; z-index: 10; }
+    .tm-header-block {
+        background: rgba(20, 20, 30, 0.5); backdrop-filter: blur(40px) saturate(150%);
+        border-radius: 24px 24px 0 0; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between;
+        border: 1px solid rgba(255,255,255,0.08); border-bottom: none; margin-bottom: 0; z-index: 5;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2); transition: border-radius 0.3s, margin-bottom 0.3s; position: relative; 
+    }
+    .tm-header-block.is-collapsed { border-radius: 24px !important; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .tm-logo-area { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+    @keyframes tm-breath { 0% { box-shadow: 0 0 10px rgba(99, 102, 241, 0.2); } 50% { box-shadow: 0 0 25px rgba(99, 102, 241, 0.6); } 100% { box-shadow: 0 0 10px rgba(99, 102, 241, 0.2); } }
+    .tm-logo-new { width: 42px; height: 42px; background: linear-gradient(135deg, #6366f1, #4338ca); border-radius: 14px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; animation: tm-breath 3s infinite ease-in-out; border: 1px solid rgba(255,255,255,0.2); flex-shrink: 0; cursor: pointer; transition: 0.2s; }
+    .tm-logo-new:active { transform: scale(0.95); }
+    .tm-logo-gloss { position: absolute; top: -50%; right: -50%; width: 24px; height: 24px; background: rgba(255,255,255,0.4); filter: blur(10px); border-radius: 50%; }
+    .tm-title-group { display: flex; flex-direction: column; justify-content: center; white-space: nowrap; transition: opacity 0.2s; }
+    .tm-main-title { font-size: 17px; font-weight: 800; color: #fff; line-height: 1.1; display: flex; align-items: center; gap: 6px; letter-spacing: 0.5px; }
+    .tm-sub-title { font-size: 11px; color: rgba(255,255,255,0.5); font-weight: 600; margin-top: 4px; letter-spacing: 0.5px; }
+    .tm-menu-trigger {
+        width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center;
+        color: #fff; cursor: pointer; margin-left: 6px; transition: all 0.2s; border: 1px solid rgba(255,255,255,0.1);
+    }
+    .tm-menu-trigger:hover { background: rgba(255,255,255,0.2); }
+    .tm-menu-trigger svg { width: 18px; height: 18px; }
+    .tm-menu-overlay {
+        position: absolute; top: 70px; left: 24px; right: auto; min-width: 200px;
+        background: rgba(30, 30, 45, 0.95); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 18px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); z-index: 100; padding: 8px;
+        display: flex; flex-direction: column; gap: 4px; transform-origin: top left;
+        transform: scale(0.95) translateY(-10px); opacity: 0; pointer-events: none;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); max-height: 450px; overflow-y: auto;
+    }
+    .tm-menu-overlay.active { transform: scale(1) translateY(0); opacity: 1; pointer-events: auto; }
+    .tm-menu-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; color: rgba(255,255,255,0.7); font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s; border: 1px solid transparent; flex-shrink: 0; user-select: none; }
+    .tm-menu-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .tm-menu-item.selected { background: rgba(99, 102, 241, 0.15); color: #fff; border-color: rgba(99, 102, 241, 0.3); }
+    .tm-menu-item.dragging { opacity: 0.5; background: rgba(255,255,255,0.1); border: 1px dashed rgba(255,255,255,0.3); }
+    .tm-menu-icon { width: 16px; height: 16px; opacity: 0.8; }
+    .tm-menu-check { margin-left: auto; width: 14px; height: 14px; color: #6366f1; opacity: 0; transform: scale(0.5); transition: all 0.2s; }
+    .tm-menu-item.selected .tm-menu-check { opacity: 1; transform: scale(1); }
+    .tm-menu-handle { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; margin-left: 6px; cursor: grab; color: rgba(255,255,255,0.3); border-radius: 4px; transition: 0.2s; touch-action: none; }
+    .tm-menu-handle:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .tm-menu-handle:active { cursor: grabbing; }
+    .tm-header-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .tm-header-btn { padding: 0 16px; height: 34px; font-size: 12px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.9); border-radius: 24px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: 700; transition: all 0.3s; backdrop-filter: blur(10px); white-space: nowrap; }
+    .tm-header-btn:hover { background: rgba(255,255,255,0.2); color: #fff; border-color: rgba(255,255,255,0.3); }
+    .tm-header-btn svg { width: 14px; height: 14px; }
+    .tm-spin { animation: tm-spin-anim 1s linear infinite; } 
+    @keyframes tm-spin-anim { 100% { transform: rotate(360deg); } }
+    .tm-body-block { background: rgba(20, 20, 30, 0.4); backdrop-filter: blur(40px); border-radius: 0 0 24px 24px; border: 1px solid rgba(255,255,255,0.05); border-top: none; overflow: hidden; transition: all 0.4s; padding-bottom: 0; min-height: 200px; display: flex; flex-direction: column; position: relative; }
+    .tm-body-block.collapsed { padding-bottom: 0 !important; border-bottom: none !important; min-height: 0; }
+    .tm-content-container { width: auto; padding: 24px; animation: fade-in 0.3s ease; } 
+    @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .tm-inner-viewport { width: 100%; overflow: hidden; position: relative; touch-action: pan-y; }
+    .tm-inner-track { display: flex; flex-wrap: nowrap; width: 100%; align-items: stretch; will-change: transform; transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
+    .tm-inner-slide { width: 100%; flex-shrink: 0; padding: 0 4px; display: flex; justify-content: center; align-items: center; }
+    .tm-inner-dots { display: flex; justify-content: center; gap: 6px; margin-top: 14px; height: 10px; }
+    .tm-inner-dots .tm-dot { width: 5px; height: 5px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.3); transition: 0.3s; }
+    .tm-inner-dots .tm-dot.active { background: #fff; width: 5px; box-shadow: 0 0 5px #fff; }
+    .tm-stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; width: 100%; }
+    .tm-stat-card { 
+        background: rgba(30, 32, 45, 0.8); border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 18px; padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; 
+        min-height: 90px; backdrop-filter: blur(10px); transition: transform 0.3s, box-shadow 0.3s; 
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15); 
+    }
+    .tm-stat-card:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,0,0,0.25); background: rgba(35, 37, 50, 0.9); }
+    .tm-stat-left { display: flex; flex-direction: column; justify-content: center; gap: 2px; flex: 1; min-width: 0; }
+    .tm-stat-title { font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.4); margin-bottom: 2px; letter-spacing: 0.3px; }
+    .tm-stat-value-row { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; margin-bottom: 4px; }
+    .tm-stat-value { font-size: 32px; font-weight: 800; color: #fff; font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px; line-height: 1; }
+    .tm-stat-unit { font-size: 13px; color: rgba(255,255,255,0.3); font-weight: 700; font-family: sans-serif; }
+    .tm-stat-footer { font-size: 12px; color: rgba(255,255,255,0.3); font-weight: 600; display: flex; align-items: center; gap: 6px; letter-spacing: 0.2px; }
+    .tm-stat-highlight { color: #34d399; }
+    .tm-icon-box { 
+        width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; 
+        margin-left: 12px; background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(5px);
+    }
+    .tm-icon-box svg { width: 22px; height: 22px; stroke-width: 2px; }
+    .icon-blue { border: 1px solid rgba(59, 130, 246, 0.3); color: #60a5fa; box-shadow: 0 0 15px rgba(59, 130, 246, 0.15), inset 0 0 10px rgba(59, 130, 246, 0.05); }
+    .icon-green { border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; box-shadow: 0 0 15px rgba(16, 185, 129, 0.15), inset 0 0 10px rgba(16, 185, 129, 0.05); }
+    .icon-orange { border: 1px solid rgba(249, 115, 22, 0.3); color: #fb923c; box-shadow: 0 0 15px rgba(249, 115, 22, 0.15), inset 0 0 10px rgba(249, 115, 22, 0.05); }
+    .icon-purple { border: 1px solid rgba(139, 92, 246, 0.3); color: #a78bfa; box-shadow: 0 0 15px rgba(139, 92, 246, 0.15), inset 0 0 10px rgba(139, 92, 246, 0.05); }
+    .tm-group-wrapper { width: 100%; }
+    .tm-group-header { display: flex; justify-content: center; align-items: center; margin-bottom: 18px; position: relative; gap: 10px; }
+    .tm-group-add-btn { width: auto; height: 36px; padding: 0 20px; border-radius: 18px; background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; margin-left: 0; cursor: pointer; color: rgba(255,255,255,0.8); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.1); transition: 0.2s; font-size: 13px !important; font-weight: 600; }
+    .tm-group-add-btn:hover { background: rgba(255,255,255,0.2); color: #fff; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+    .tm-group-add-btn svg { width: 14px; height: 14px; margin-right: 6px; }
+    .tm-card-modern { width: 100%; display: flex; flex-direction: column; background: rgba(30, 35, 50, 0.5); backdrop-filter: blur(25px); border-radius: 24px; padding: 24px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.3); transition: transform 0.3s; min-height: 200px; justify-content: space-between; }
+    .tm-c-row-top { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; width: 100%; }
+    .tm-c-icon { width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center; color: white; box-shadow: 0 8px 20px rgba(0,0,0,0.3); flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1); }
+    .tm-c-icon svg { width: 26px; height: 26px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); }
+    .tm-c-info-col { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+    .tm-c-name-line { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+    .tm-name-group { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; flex-wrap: wrap; }
+    .tm-c-name { font-size: 18px; font-weight: 800; color: #fff; white-space: nowrap; line-height: 1.2; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+    .tm-c-remark { font-size: 13px; color: rgba(255,255,255,0.5); font-weight: 500; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tm-edit-btn { color: rgba(255,255,255,0.3); cursor: pointer; display: flex; transition: 0.2s; } 
+    .tm-edit-btn:hover { color: #60a5fa; opacity: 1; }
+    .tm-edit-btn svg { width: 14px; height: 14px; }
+    .tm-c-status { font-size: 10px; padding: 3px 10px; border-radius: 12px; border: 1px solid; font-weight: 700; display: flex; align-items: center; gap: 4px; white-space: nowrap; flex-shrink: 0; height: 22px; backdrop-filter: blur(5px); margin-left: 8px; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .st-ok { background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #6ee7b7; } .st-ok .status-dot { background: #34d399; box-shadow: 0 0 6px #34d399; }
+    .st-warn { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.3); color: #fcd34d; } .st-warn .status-dot { background: #fbbf24; }
+    .st-err { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #fca5a5; } .st-err .status-dot { background: #f87171; }
+    .tm-c-row-mid { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; padding-left: 2px; }
+    .tm-c-num-group { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; overflow: hidden; } 
+    .tm-c-num-text { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; color: rgba(255,255,255,0.7); letter-spacing: 0.5px; }
+    .tm-eye-btn { cursor: pointer; color: rgba(255,255,255,0.4); display: flex; transition: 0.2s; flex-shrink: 0; }
+    .tm-eye-btn:hover { color: #fff; } .tm-eye-btn svg { width: 16px; height: 16px; }
+    .tm-c-actions { display: flex; gap: 10px; flex-shrink: 0; margin-left: 10px; }
+    .tm-icon-btn { width: 42px; height: 42px; min-width: 42px; border-radius: 50%; color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; flex-shrink: 0; backdrop-filter: blur(5px); }
+    .tm-icon-btn:hover { background: rgba(255,255,255,0.25); color: #fff; transform: translateY(-2px); border-color: rgba(255,255,255,0.4); } 
+    .tm-icon-btn.del:hover { background: rgba(239, 68, 68, 0.3); color: #fca5a5; border-color: rgba(239, 68, 68, 0.5); }
+    .tm-icon-btn svg { width: 18px; height: 18px; display: block; }
+    .tm-cm-stats-row { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; padding: 0 6px; }
+    .tm-stat-group { display: flex; flex-direction: column; } .tm-stat-group.right { text-align: right; }
+    .tm-cm-label { font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 6px; font-weight: 600; }
+    .tm-cm-val { font-size: 26px; font-weight: 800; color: #60a5fa; font-family: 'JetBrains Mono'; letter-spacing: -1px; text-shadow: 0 0 20px rgba(96, 165, 250, 0.2); }
+    .tm-cm-unit { font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.4); margin-left: 3px; font-family: sans-serif; }
+    .tm-cm-bar-bg { height: 10px; background: rgba(255, 255, 255, 0.1); border-radius: 10px; margin-bottom: 24px; position: relative; overflow: visible; margin-top: 10px; }
+    .tm-cm-bar-fill { 
+        height: 100%; border-radius: 10px; position: relative; width: 0%; 
+        transition: width 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        background-image: linear-gradient(45deg,rgba(255,255,255,0.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,0.15) 50%,rgba(255,255,255,0.15) 75%,transparent 75%,transparent);
+        background-size: 20px 20px; animation: tm-bar-flow 1s linear infinite; 
+    }
+    @keyframes tm-bar-flow { from { background-position: 0 0; } to { background-position: 20px 0; } }
+    .tm-percent-embed { 
+        position: absolute; top: 50%;
+        padding: 4px 10px; border-radius: 12px; font-family: 'JetBrains Mono', monospace; 
+        font-size: 12px; font-weight: 800; color: #111; 
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3); z-index: 10; white-space: nowrap; line-height: 1; 
+        transition: left 1.2s cubic-bezier(0.34, 1.56, 0.64, 1), transform 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        pointer-events: none;
+    }
+    .tm-cm-footer { display: grid; grid-template-columns: 1fr 1fr 1fr; font-size: 12px; color: rgba(255,255,255,0.4); border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px; font-weight: 600; white-space: nowrap; }
+    .tm-empty-card { align-items: center; justify-content: center; min-height: 200px; border: 1px dashed rgba(255,255,255,0.2); background: rgba(255,255,255,0.02); cursor: pointer; transition: 0.2s; color: rgba(255,255,255,0.5); gap: 10px; flex-direction: column; }
+    .tm-empty-card:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.4); color: #fff; }
+    .fm-wrapper { width: 100%; max-width: 100%; }
+    .fm-hud-header { 
+        display: flex; justify-content: space-between; align-items: center; 
+        background: rgba(30, 40, 60, 0.5); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(20px);
+        border-radius: 50px; padding: 0 18px; margin-bottom: 18px; width: 100%; 
+        box-sizing: border-box; box-shadow: 0 8px 30px rgba(0,0,0,0.3); height: 52px; margin-bottom: 0; 
+    }
+    .fm-status-pill { display: flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); padding: 5px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; color: #34d399; letter-spacing: 0.5px; z-index: 2; flex-shrink: 0; box-shadow: 0 0 10px rgba(16,185,129,0.1); }
+    .fm-status-dot { width: 6px; height: 6px; background: #34d399; border-radius: 50%; box-shadow: 0 0 8px #34d399; }
+    .fm-mid-info { flex: 1; display: flex; align-items: center; justify-content: center; z-index: 1; gap: 8px; }
+    .fm-brand-text { font-size: 16px; font-weight: 900; color: #fff; text-shadow: 0 0 20px rgba(255,255,255,0.6); letter-spacing: 2px; white-space: nowrap; }
+    .fm-mode-btn { background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: #60a5fa; padding: 5px 16px; border-radius: 20px; font-size: 11px; font-weight: 700; cursor: default; display: flex; align-items: center; gap: 6px; z-index: 2; flex-shrink: 0; backdrop-filter: blur(5px); }
+    .fm-mode-btn svg { width: 12px; height: 12px; }
+    .fm-collapse-btn { 
+        width: 20px; height: 20px; border-radius: 50%; 
+        background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; 
+        cursor: pointer; transition: all 0.3s; color: rgba(255,255,255,0.7); 
+    }
+    .fm-collapse-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
+    .fm-collapse-btn svg { width: 14px; height: 14px; transition: transform 0.3s; }
+    .fm-collapse-btn.collapsed svg { transform: rotate(-90deg); }
+    .fm-body-transition { transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); overflow: hidden; opacity: 1; margin-top: 18px; }
+    .fm-body-transition.hidden { height: 0; opacity: 0; margin-top: 0; }
+    .fm-alert { 
+        display: flex; align-items: center; justify-content: center; gap: 10px; 
+        color: #ffedeb; font-size: 12px; font-weight: 700; background: rgba(80, 10, 10, 0.6); 
+        backdrop-filter: blur(20px); padding: 12px; border-radius: 16px; 
+        border: 1px solid rgba(248, 113, 113, 0.4); text-align: center; margin-bottom: 24px; width: 100%; box-sizing: border-box; 
+        text-shadow: 0 1px 2px rgba(0,0,0,0.8); box-shadow: 0 10px 30px rgba(127, 29, 29, 0.2);
+    }
+    .fm-alert svg { color: #fbbf24; width: 18px; height: 18px; filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.5)); }
+    .fm-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; width: 100%; }
+    .fm-card { 
+        height: auto; min-height: 76px; display: flex; flex-direction: row; align-items: center; justify-content: center; 
+        cursor: pointer; position: relative; transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
+        padding: 16px 8px; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.08); 
+        overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.2); backdrop-filter: blur(10px);
+    }
+    .fm-card[data-type="0100"] { background: linear-gradient(145deg, rgba(37, 99, 235, 0.8), rgba(30, 58, 138, 0.6)); }
+    .fm-card[data-type="0200"] { background: linear-gradient(145deg, rgba(8, 145, 178, 0.8), rgba(21, 94, 117, 0.6)); }
+    .fm-card[data-type="0300"] { background: linear-gradient(145deg, rgba(220, 38, 38, 0.8), rgba(153, 27, 27, 0.6)); }
+    .fm-card:hover { transform: translateY(-4px) scale(1.02); filter: brightness(1.1); border-color: rgba(255,255,255,0.3); box-shadow: 0 15px 30px rgba(0,0,0,0.3); }
+    .fm-card.active { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 0 30px rgba(255,255,255,0.2); transform: scale(1.03); z-index: 2; }
+    .fm-card.active[data-type="0100"] { background: linear-gradient(135deg, #3b82f6, #1d4ed8); border-color: #93c5fd; }
+    .fm-card.active[data-type="0200"] { background: linear-gradient(135deg, #06b6d4, #0e7490); border-color: #67e8f9; }
+    .fm-card.active[data-type="0300"] { background: linear-gradient(135deg, #ef4444, #b91c1c); border-color: #fda4af; }
+    .fm-content-wrapper { display: flex; align-items: center; justify-content: center; width: 100%; text-align: center; z-index: 1; position: relative; }
+    .fm-text-group { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .fm-title-cn { font-size: 15px; font-weight: 800; margin-bottom: 2px; letter-spacing: 1px; line-height: 1.1; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+    .fm-title-en { font-size: 10px; font-weight: 700; font-family: 'Arial', sans-serif; text-transform: uppercase; line-height: 1; color: rgba(255,255,255,0.6); white-space: nowrap; }
+    .fm-card.active .fm-title-cn { color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.5); } 
+    .fm-card.active .fm-title-en { color: rgba(255,255,255,0.9); }
+    .connect-badge { position: absolute; right: 10px; top: 10px; opacity: 0; transition: 0.3s; width: 8px; height: 8px; background: #fff; border-radius: 50%; display: block; box-shadow: 0 0 8px rgba(255,255,255,1), 0 0 15px rgba(255,255,255,0.8); z-index: 2; }
+    .fm-card.active .connect-badge { opacity: 1; }
+    .monitor-switch { position: relative; width: 44px; height: 24px; display: inline-block; }
+    .monitor-switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.1); transition: .4s; border-radius: 34px; border: 1px solid rgba(255,255,255,0.1); }
+    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    input:checked + .slider { background-color: rgba(99, 102, 241, 0.6); border-color: rgba(99, 102, 241, 0.8); }
+    input:checked + .slider:before { transform: translateX(20px); }
+    .tm-toast { position: fixed; top: 12%; left: 50%; transform: translateX(-50%); background: rgba(20,20,30,0.85); color: #fff; padding: 12px 24px; border-radius: 40px; font-size: 14px; font-weight: 700; z-index: 99999; opacity: 0; transition: 0.3s; border: 1px solid rgba(255,255,255,0.15); backdrop-filter: blur(20px); display: flex; align-items: center; gap: 10px; }
+    .tm-toast.show { opacity: 1; } .tm-toast svg { width: 18px; height: 18px; }
+    .tm-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 10000; display: flex; align-items: center; justify-content: center; opacity: 0; animation: tm-fade-in 0.2s forwards; }
+    @keyframes tm-fade-in { to { opacity: 1; } }
+    .tm-modal-content { background: rgba(30, 35, 50, 0.95); width: 85%; max-width: 320px; padding: 24px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 50px rgba(0,0,0,0.5); transform: scale(0.95); animation: tm-scale-in 0.2s forwards; display: flex; flex-direction: column; gap: 16px; }
+    @keyframes tm-scale-in { to { transform: scale(1); } }
+    .tm-modal-title { font-size: 18px; font-weight: 800; color: #fff; text-align: center; margin-bottom: 4px; }
+    .tm-modal-input { width: 100%; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 16px; outline: none; transition: 0.2s; }
+    .tm-modal-input:focus { border-color: #6366f1; background: rgba(0,0,0,0.3); }
+    .tm-modal-btns { display: flex; gap: 12px; margin-top: 8px; }
+    .tm-modal-btn { flex: 1; height: 40px; border-radius: 12px; border: none; font-size: 14px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+    .btn-cancel { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); }
+    .btn-cancel:hover { background: rgba(255,255,255,0.15); color: #fff; }
+    .btn-confirm { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3); }
+    .btn-confirm:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4); }
+    @media (max-width: 768px) {
+        .tm-content-container { padding: 10px; }
+        /* 修改头部内边距，稍微减小两边空隙 */
+        .tm-header-block { padding: 12px 10px; } 
+        
+        .tm-logo-new { width: 36px; height: 36px; }
+        .tm-main-title { font-size: 15px; }
+        .tm-sub-title { font-size: 9px; transform: scale(0.9); transform-origin: left; opacity: 0.7; }
+        
+        /* --- 新增修复核心代码开始 --- */
+        /* 在手机端隐藏“全部刷新”文字，只留图标 */
+        .tm-header-btn span { display: none; } 
+        /* 将按钮调整为正方形图标按钮 */
+        .tm-header-btn { width: 34px; padding: 0; justify-content: center; } 
+        /* 减小头部右侧元素之间的间距 */
+        .tm-header-actions { gap: 8px; }
+        /* --- 新增修复核心代码结束 --- */
+
+        .tm-card-modern { padding: 16px; }
+        .tm-cm-head { margin-bottom: 16px; }
+        .tm-cm-name { font-size: 17px; }
+        .tm-cm-icon { width: 48px; height: 48px; }
+        .tm-stat-grid { gap: 8px; margin: 0; width: 100%; display: grid; grid-template-columns: repeat(2, 1fr); }
+        .tm-stat-card { padding: 12px 14px; min-height: 80px; } 
+        .tm-stat-title { font-size: 11px; margin-bottom: 0; }
+        .tm-stat-value { font-size: 19px; letter-spacing: -0.5px; }
+        .tm-stat-unit { font-size: 10px; margin-left: 2px; }
+        .tm-stat-footer { font-size: 10px; white-space: nowrap; margin-top: 2px; }
+        .tm-icon-box { width: 36px; height: 36px; margin-left: 6px; border-radius: 10px; }
+        .tm-icon-box svg { width: 18px; height: 18px; }
+        .fm-grid { grid-template-columns: 1fr; gap: 10px; }
+        .fm-hud-header { height: 44px; padding: 0 4px; gap: 2px; justify-content: space-between; } 
+        .fm-brand-text { font-size: 12px; margin-right: 4px; } 
+        .fm-status-pill { font-size: 9px; padding: 2px 6px; gap: 2px; white-space: nowrap; flex-shrink: 0; } 
+        .fm-mode-btn { font-size: 9px; padding: 2px 6px; white-space: nowrap; flex-shrink: 0; } 
+        .fm-mid-info { flex: 1; justify-content: center; gap: 2px; min-width: 0; } 
+        .fm-collapse-btn { width: 22px; height: 22px; }
+        .fm-card { padding: 10px; min-height: 56px; }
+        .fm-title-cn { font-size: 14px; }
+        .fm-title-en { font-size: 8px; }
+        .tm-cm-val { font-size: 20px; }
+        .tm-cm-footer { font-size: 11px; }
+        .tm-card-actions { gap: 4px; }
+        .tm-icon-btn { width: 36px; height: 36px; min-width: 36px; }
+        .tm-icon-btn svg { width: 16px; height: 16px; }
+        .tm-c-num-text { font-size: 14px; }
+    }
+  `;
+  document.head.appendChild(style);
+
+  class Carousel {
+      constructor(viewport, track, dotsContainer, isNested = false, onIndexChange = null, initialIndex = 0) {
+          this.viewport = viewport; this.track = track; this.dotsContainer = dotsContainer; 
+          this.isNested = isNested; this.onIndexChange = onIndexChange;
+          this.index = initialIndex; this.startX = 0; this.isDragging = false; 
+          this.init();
+          if(this.index > 0) this.slideTo(this.index, false); 
+      }
+      updateDots(count) {
+          if(!this.dotsContainer) return; this.dotsContainer.innerHTML = ''; if(count <= 1) return; 
+          for(let i=0; i<count; i++) {
+              const dot = document.createElement('div');
+              dot.className = `tm-dot ${i === this.index ? 'active' : ''}`;
+              dot.onclick = (e) => { e.stopPropagation(); this.slideTo(i); };
+              this.dotsContainer.appendChild(dot);
+          }
+      }
+      slideTo(index, animate = true) {
+          const maxIndex = this.track.children.length - 1;
+          if (index < 0) index = 0; if (index > maxIndex) index = maxIndex;
+          this.index = index;
+          if(this.onIndexChange) this.onIndexChange(index);
+          this.track.style.transition = animate ? 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)' : 'none';
+          this.track.style.transform = `translateX(-${index * 100}%)`;
+          this.updateDots(this.track.children.length);
+      }
+      init() {
+          let isMoved = false;
+          const handleStart = (e) => { if(this.track.children.length <= 1) return; if(this.isNested) e.stopPropagation(); this.isDragging = true; isMoved = false; this.startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX; this.track.style.transition = 'none'; };
+          const handleMove = (e) => { if (!this.isDragging) return; if(this.isNested) e.stopPropagation(); const currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX; const diffX = currentX - this.startX; if (Math.abs(diffX) < 5) return; isMoved = true; if (e.cancelable) e.preventDefault(); this.track.style.transform = `translateX(${-(this.index * this.viewport.offsetWidth) + diffX}px)`; };
+          const handleEnd = (e) => { if (!this.isDragging) return; if(this.isNested) e.stopPropagation(); this.isDragging = false; if (!isMoved) return; const endX = e.type.includes('mouse') ? e.clientX : e.changedTouches[0].clientX; const diff = endX - this.startX; if (Math.abs(diff) > 50) this.slideTo(diff > 0 ? this.index - 1 : this.index + 1); else this.slideTo(this.index); };
+          this.viewport.addEventListener('touchstart', handleStart, { passive: true }); this.viewport.addEventListener('touchmove', handleMove, { passive: false }); this.viewport.addEventListener('touchend', handleEnd); this.viewport.addEventListener('mousedown', handleStart); this.viewport.addEventListener('mousemove', handleMove); this.viewport.addEventListener('mouseup', handleEnd); this.viewport.addEventListener('mouseleave', handleEnd);
+          setTimeout(() => this.updateDots(this.track.children.length), 100);
+      }
+  }
+
+  const CardManager = {
+    getList: (brandId) => {
+      const config = BRAND_CONFIG[brandId]; if(!config || !config.key) return [];
+      try { const v = localStorage.getItem(config.key); let list = v ? JSON.parse(v) : []; if(!Array.isArray(list)) list = [v]; return list.filter(n => n && n !== 'null' && n !== config.defaultVal); } catch(e) { return []; }
+    },
+    add: (brandId, number) => { const c = BRAND_CONFIG[brandId]; const l = CardManager.getList(brandId); if(!l.includes(number)) { l.push(number); localStorage.setItem(c.key, JSON.stringify(l)); return true; } return false; },
+    update: (brandId, oldN, newN) => { const c = BRAND_CONFIG[brandId]; let l = CardManager.getList(brandId); const idx = l.indexOf(oldN); if(idx!==-1) l[idx]=newN; else l.push(newN); localStorage.setItem(c.key, JSON.stringify(l)); },
+    remove: (brandId, number) => { 
+        const c = BRAND_CONFIG[brandId]; let l = CardManager.getList(brandId); 
+        l = l.filter(n => n !== number); 
+        localStorage.setItem(c.key, JSON.stringify(l)); 
+        delete GlobalDataCache[number]; 
+        localStorage.setItem(DATA_CACHE_KEY, JSON.stringify(GlobalDataCache));
+        updateDashboardUI(); 
+        if(ViewState.currentView === brandId) window.switchView(brandId);
+    }
+  };
+
+  const renderMaskedNumber = (fullNumber) => {
+    if (!fullNumber || fullNumber === '本机') return '本机';
+    const masked = fullNumber.length > 4 ? fullNumber.slice(0, -4) + 'XXXX' : fullNumber;
+    return `<span class="tm-c-num-text" data-full="${fullNumber}" data-masked="${masked}">${masked}</span><span class="tm-eye-btn" onclick="window.toggleEye(this)" ontouchstart="event.stopPropagation();" onmousedown="event.stopPropagation();">${Icons.EyeOff}</span>`;
+  };
+  window.toggleEye = function(btn) { 
+      const num = btn.previousElementSibling; 
+      const isM = num.textContent.includes('X'); 
+      num.textContent = isM ? num.dataset.full : num.dataset.masked; 
+      btn.innerHTML = isM ? Icons.Eye : Icons.EyeOff; 
+      btn.style.color = isM ? '#fff' : 'rgba(255,255,255,0.4)';
+  };
+  
+  window.animateValue = function(id, start, end, duration) {
+      const obj = document.getElementById(id); if (!obj) return;
+      if (isNaN(parseFloat(start)) || isNaN(parseFloat(end))) { obj.innerHTML = end; return; }
+      if (AnimationRegistry[id]) cancelAnimationFrame(AnimationRegistry[id]);
+      
+      let startTimestamp = null;
+      const step = (timestamp) => {
+          if (!startTimestamp) startTimestamp = timestamp;
+          const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+          const ease = 1 - Math.pow(1 - progress, 4);
+          const current = parseFloat(start) + (parseFloat(end) - parseFloat(start)) * ease;
+          
+          if (id === 'dashboard_status') { obj.innerHTML = Math.floor(current); } 
+          else { obj.innerHTML = current.toFixed(id === 'dashboard_percent' ? 0 : 2); }
+          
+          if (progress < 1) { 
+              AnimationRegistry[id] = window.requestAnimationFrame(step); 
+          } else { 
+            obj.innerHTML = id === 'dashboard_percent' ? end.toFixed(0) : (id === 'dashboard_status' ? end : parseFloat(end).toFixed(2)); 
+          }
+      };
+      AnimationRegistry[id] = window.requestAnimationFrame(step);
+  };
+  
+  window.showToast = function(msg, type = 'success') {
+      const old = document.querySelector('.tm-toast'); if(old) old.remove();
+      const t = document.createElement('div'); t.className = 'tm-toast';
+      let icon = Icons.Loading; let col = '#6366f1';
+      if(type === 'success') { icon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>`; col = '#34d399'; }
+      if(type === 'error') { icon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`; col = '#f87171'; }
+      if(type === 'loading') { icon = Icons.Loading; col = '#60a5fa'; } 
+      t.innerHTML = `<div style="color:${col};display:flex">${icon}</div><span>${msg}</span>`;
+      document.body.appendChild(t); setTimeout(() => t.classList.add('show'), 10); setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 4000);
+  };
+
+  window.showInputModal = function(title, placeholder, val, onConfirm) {
+      const m = document.createElement('div'); m.className = 'tm-modal';
+      m.innerHTML = `<div class="tm-modal-content"><div class="tm-modal-title">${title}</div><input class="tm-modal-input" value="${val||''}" placeholder="${placeholder}"><div class="tm-modal-btns"><button class="tm-modal-btn btn-cancel">取消</button><button class="tm-modal-btn btn-confirm">确定</button></div></div>`;
+      document.body.appendChild(m);
+      const inp = m.querySelector('input'); inp.focus();
+      m.querySelector('.btn-cancel').onclick = () => m.remove();
+      m.querySelector('.btn-confirm').onclick = () => { onConfirm(inp.value.trim()); m.remove(); };
+  };
+
+  window.showConfirmModal = function(title, desc, onConfirm) {
+      const m = document.createElement('div'); m.className = 'tm-modal';
+      m.innerHTML = `<div class="tm-modal-content"><div class="tm-modal-title">${title}</div><div style="text-align:center;color:rgba(255,255,255,0.6);margin-bottom:24px;font-size:13px;">${desc}</div><div class="tm-modal-btns"><button class="tm-modal-btn btn-cancel">取消</button><button class="tm-modal-btn btn-confirm" style="background:linear-gradient(135deg,#ef4444,#b91c1c);box-shadow:0 5px 15px rgba(239,68,68,0.3)">确定</button></div></div>`;
+      document.body.appendChild(m);
+      m.querySelector('.btn-cancel').onclick = () => m.remove();
+      m.querySelector('.btn-confirm').onclick = () => { onConfirm(); m.remove(); };
+  };
+  
+  window.confirmFeimaoSwitch = function(networkName, code, element) {
+      const modal = document.createElement('div'); modal.className = 'tm-modal';
+      modal.innerHTML = `<div class="tm-modal-content"><div style="text-align:left; font-size:14px; color:rgba(255,255,255,0.85); line-height:1.6;"><div style="font-size:17px; font-weight:bold; margin-bottom:14px; color:#fff;">网络切换重要提示：</div><div style="color:#f59e0b; font-weight:bold; margin-bottom:10px; display:flex; gap:6px;"><span>⚠️</span> <span>请务必确认当前设备使用的是“飞猫分身卡”后再进行切换！</span></div><ul style="margin:0 0 14px 20px; padding:0; list-style-type:disc; color:#ef4444; font-weight:bold; font-size:13px;"><li>如果不是飞猫分身卡切换网络可能会导致锁卡！</li><li>若因误操作导致锁卡，后果需自行承担！</li></ul><div style="margin-bottom:10px; display:flex; gap:6px; align-items:start;"><span>✅</span> <span>如已确认为飞猫分身卡，点击“确定”将为您切换至 <span style="color:#3b82f6; font-weight:bold;">${networkName}</span>。</span></div><div style="color:rgba(255,255,255,0.5); font-size:12px; display:flex; gap:6px; align-items:center;"><span>📌</span> <span>切换过程中网络将短暂中断，请耐心等待！</span></div></div><div class="tm-modal-btns" style="margin-top:24px;"><button class="tm-modal-btn btn-confirm" id="fm_confirm">确定</button><button class="tm-modal-btn btn-cancel" id="fm_cancel">取消</button></div></div>`;
+      document.body.appendChild(modal);
+      document.getElementById('fm_cancel').onclick = () => modal.remove();
+      document.getElementById('fm_confirm').onclick = () => { modal.remove(); window.executeFeimaoSwitch(code, element); };
+  };
+
+  window.toggleFeimaoGroup = (btn) => {
+      const content = document.getElementById('fm_content_body');
+      if (content) {
+          if (content.classList.contains('hidden')) {
+              content.classList.remove('hidden');
+              btn.classList.remove('collapsed');
+              localStorage.setItem(FM_COLLAPSE_KEY, 'open');
+          } else {
+              content.classList.add('hidden');
+              btn.classList.add('collapsed');
+              localStorage.setItem(FM_COLLAPSE_KEY, 'closed');
+          }
+      }
+  };
+
+  const oldContainer = document.getElementById('TM_CONTAINER'); if(oldContainer) oldContainer.remove();
+  const netCard = document.querySelector('.net-card');
+  const container = document.createElement('div'); container.id = 'TM_CONTAINER';
+  
+  const logoHtml = `
+      <div class="tm-logo-new" onclick="window.switchView('overview')">
+          <div class="tm-logo-gloss"></div>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#fff; z-index:2;">
+              <path d="M12 22S20 18 20 12V5L12 2L4 5V12C4 18 12 22 12 22Z"></path>
+              <path d="M8 14V16"></path><path d="M12 11V16"></path><path d="M16 8V16"></path>
+          </svg>
+      </div>`;
+  
+  container.innerHTML = `
+    <div class="tm-header-block">
+        <div class="tm-logo-area">
+            ${logoHtml}
+            <div class="tm-title-group" id="tm_header_title">
+                <div class="tm-main-title">流量管家 <span>Pro</span></div>
+                <div class="tm-sub-title">物联网卡聚合管理中心</div>
+            </div>
+            <div id="tm_menu_btn" class="tm-menu-trigger" onclick="window.toggleMenu()">
+                ${Icons.Menu}
+            </div>
+        </div>
+        
+        <div class="tm-header-actions">
+            <button id="refresh_all_btn" class="tm-header-btn">${Icons.Refresh} <span>全部刷新</span></button>
+            <label class="monitor-switch"><input type="checkbox" id="collapse_toggle" checked><span class="slider round"></span></label>
+        </div>
+        
+        <div id="tm_menu_overlay" class="tm-menu-overlay"></div>
+    </div>
+    <div class="tm-body-block" id="collapse_main">
+        <div id="tm_content_area" class="tm-content-container"></div>
+    </div>`;
+
+  const fc = document.querySelector('.functions-container'); if (fc) fc.insertAdjacentElement("afterend", container); else if(netCard) netCard.parentNode.insertBefore(container, netCard.nextSibling);
+
+  function getActiveGroups() {
+      const defaultOrder = Object.keys(BRAND_CONFIG);
+      const saved = localStorage.getItem(ORDER_KEY);
+      
+      if (saved) {
+          try {
+              const savedOrder = JSON.parse(saved);
+              const validSaved = savedOrder.filter(k => BRAND_CONFIG[k]);
+              const missing = defaultOrder.filter(k => !validSaved.includes(k));
+              return [...validSaved, ...missing];
+          } catch(e) { console.error('Sort load error', e); }
+      }
+      return defaultOrder;
+  }
+  
+  function updateMenuButtonVisibility() {
+      const btn = document.getElementById('tm_menu_btn');
+      btn.style.display = 'flex';
+  }
+
+  window.toggleMenu = (forceClose = false) => {
+      const overlay = document.getElementById('tm_menu_overlay');
+      if (forceClose || overlay.classList.contains('active')) {
+          overlay.classList.remove('active');
+          setTimeout(() => overlay.style.display = 'none', 200);
+          document.removeEventListener('click', closeMenuOutside);
+      } else {
+          renderMenuContent();
+          overlay.style.display = 'flex';
+          requestAnimationFrame(() => overlay.classList.add('active'));
+          setTimeout(() => document.addEventListener('click', closeMenuOutside), 0);
+          enableMenuSorting();
+      }
+  };
+  
+  function closeMenuOutside(e) {
+      if (!e.target.closest('.tm-menu-overlay') && !e.target.closest('.tm-menu-trigger')) {
+          window.toggleMenu(true);
+      }
+  }
+
+  function renderMenuContent() {
+      const overlay = document.getElementById('tm_menu_overlay');
+      const active = getActiveGroups();
+      
+      let html = '';
+      active.forEach(key => {
+          const cfg = BRAND_CONFIG[key];
+          const isSelected = ViewState.currentView === key;
+          const iconSvg = Icons[cfg.icon] || Icons.Sim;
+          
+          html += `<div class="tm-menu-item ${isSelected ? 'selected' : ''}" data-key="${key}" onclick="window.switchView('${key}')">
+              <div class="tm-menu-icon" style="color:${isSelected ? '#6366f1' : 'inherit'}">${iconSvg}</div>
+              <span>${cfg.name}</span>
+              <div class="tm-menu-check">${Icons.Check}</div>
+              <div class="tm-menu-handle" onclick="event.stopPropagation()">${Icons.Drag}</div>
+          </div>`;
+      });
+      
+      overlay.innerHTML = html;
+  }
+  
+  function enableMenuSorting() {
+      const container = document.getElementById('tm_menu_overlay');
+      let draggedItem = null;
+      let touchStartY = 0;
+      let dragSrcEl = null;
+
+      container.querySelectorAll('.tm-menu-item').forEach(item => {
+          item.setAttribute('draggable', 'true');
+          item.addEventListener('dragstart', (e) => {
+              draggedItem = item;
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setData('text/html', item.innerHTML);
+              setTimeout(() => item.classList.add('dragging'), 0);
+          });
+          item.addEventListener('dragend', () => {
+              draggedItem = null;
+              item.classList.remove('dragging');
+              saveSortOrder();
+          });
+          item.addEventListener('dragover', (e) => {
+              e.preventDefault(); 
+              e.dataTransfer.dropEffect = 'move';
+              const afterElement = getDragAfterElement(container, e.clientY);
+              if (afterElement == null) {
+                  container.appendChild(draggedItem);
+              } else {
+                  container.insertBefore(draggedItem, afterElement);
+              }
+          });
+
+          item.addEventListener('touchstart', (e) => {
+              if(e.target.closest('.tm-menu-handle') || e.target.classList.contains('tm-menu-item')) {
+                  touchStartY = e.touches[0].clientY;
+                  dragSrcEl = item;
+                  setTimeout(() => item.classList.add('dragging'), 200);
+              }
+          }, {passive: false});
+
+          item.addEventListener('touchmove', (e) => {
+              if (!dragSrcEl) return;
+              e.preventDefault();
+              const touchY = e.touches[0].clientY;
+              const afterElement = getDragAfterElement(container, touchY);
+              if (afterElement) {
+                  container.insertBefore(dragSrcEl, afterElement);
+              } else {
+                  container.appendChild(dragSrcEl);
+              }
+          }, {passive: false});
+
+          item.addEventListener('touchend', () => {
+              if (dragSrcEl) {
+                  dragSrcEl.classList.remove('dragging');
+                  dragSrcEl = null;
+                  saveSortOrder();
+              }
+          });
+      });
+  }
+
+  function getDragAfterElement(container, y) {
+      const draggableElements = [...container.querySelectorAll('.tm-menu-item:not(.dragging)')];
+      return draggableElements.reduce((closest, child) => {
+          const box = child.getBoundingClientRect();
+          const offset = y - box.top - box.height / 2;
+          if (offset < 0 && offset > closest.offset) {
+              return { offset: offset, element: child };
+          } else {
+              return closest;
+          }
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+  }
+  
+  function saveSortOrder() {
+      const newOrder = [];
+      document.querySelectorAll('.tm-menu-item').forEach(item => {
+          newOrder.push(item.getAttribute('data-key'));
+      });
+      localStorage.setItem(ORDER_KEY, JSON.stringify(newOrder));
+  }
+  
+  window.switchView = (viewKey) => {
+      ViewState.currentView = viewKey;
+      localStorage.setItem(VIEW_KEY, viewKey);
+      renderMainContent(viewKey);
+      window.toggleMenu(true); 
+  };
+
+  function renderMainContent(viewKey) {
+      const container = document.getElementById('tm_content_area');
+      container.innerHTML = ''; 
+      
+      if (viewKey === 'overview') {
+          container.innerHTML = `<div class="tm-stat-grid">
+             <div class="tm-stat-card"><div class="tm-stat-left"><span class="tm-stat-title">总使用量</span><div class="tm-stat-value-row"><div class="tm-stat-value" id="dashboard_used">0.00</div><div class="tm-stat-unit">GB</div></div><div class="tm-stat-footer" id="dashboard_used_total">共 -- GB</div></div><div class="tm-icon-box icon-blue">${Icons.PieChart}</div></div>
+             <div class="tm-stat-card"><div class="tm-stat-left"><span class="tm-stat-title">剩余流量</span><div class="tm-stat-value-row"><div class="tm-stat-value" id="dashboard_remain">0.00</div><div class="tm-stat-unit">GB</div></div><div class="tm-stat-footer tm-stat-highlight" id="dashboard_remain_days">预计可用 -- 天</div></div><div class="tm-icon-box icon-green">${Icons.TrendingUp}</div></div>
+             <div class="tm-stat-card"><div class="tm-stat-left"><span class="tm-stat-title">使用占比</span><div class="tm-stat-value-row"><div class="tm-stat-value" id="dashboard_percent">0</div><div class="tm-stat-unit">%</div></div><div class="tm-stat-footer">实时统计</div></div><div class="tm-icon-box icon-orange">${Icons.Activity}</div></div>
+             <div class="tm-stat-card"><div class="tm-stat-left"><span class="tm-stat-title">已有设备</span><div class="tm-stat-value-row"><div class="tm-stat-value" id="dashboard_status">0</div><div class="tm-stat-unit">台</div></div><div class="tm-stat-footer">在线监控</div></div><div class="tm-icon-box icon-purple">${Icons.Smartphone}</div></div>
+          </div>`;
+          updateDashboardUI();
+      } else {
+          const content = renderGroupContent(viewKey);
+          container.appendChild(content.element);
+          content.promises.forEach(p => p()); 
+      }
+  }
+
+  function renderGroupContent(bid) {
+     const wrapper = document.createElement('div'); wrapper.className = 'tm-group-wrapper';
+     const refreshPromises = [];
+
+     if (bid !== 'feimao') {
+         const header = document.createElement('div');
+         header.className = 'tm-group-header';
+         header.innerHTML = `<div class="tm-group-add-btn" onclick="window.addDevice('${bid}')" title="添加新卡">${Icons.Plus} 添加新设备到 ${BRAND_CONFIG[bid].name}</div>`;
+         wrapper.appendChild(header);
+     }
+
+     if(bid === 'feimao') {
+        const fc = document.createElement('div'); fc.id='feimao_card'; fc.className='tm-card-modern';
+        wrapper.appendChild(fc);
+        setTimeout(() => renderCard('feimao_card', {}, 'feimao'), 0);
+     } else {
+         const list = CardManager.getList(bid);
+         if(list.length === 0) {
+             const empty = document.createElement('div');
+             empty.className = 'tm-card-modern tm-empty-card'; 
+             empty.innerHTML = `<div style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.4)">暂无设备，点击上方按钮添加</div>`;
+             wrapper.appendChild(empty);
+         } else {
+             const iv = document.createElement('div'); iv.className='tm-inner-viewport';
+             const it = document.createElement('div'); it.className='tm-inner-track'; it.id = `track_${bid}`;
+             const idots = document.createElement('div'); idots.className='tm-inner-dots';
+             
+             list.forEach(num => {
+                 const cs = document.createElement('div'); cs.className='tm-inner-slide';
+                 const cc = document.createElement('div'); 
+                 cc.id=`card_${bid}_${num}`; 
+                 cc.className='tm-card-modern';
+                 cc.setAttribute('data-brand', bid);
+                 cc.setAttribute('data-number', num);
+                 
+                 const cachedData = GlobalDataCache[num] || { number: num, totalGB: 0, usedGB: 0, remainingGB: 0, expireDate: '--', updateTime: '--' };
+                 renderCard(cc, cachedData, bid);
+                 
+                 cs.appendChild(cc); it.appendChild(cs);
+                 
+                 refreshPromises.push(() => window.triggerRefresh(cc.id, num, bid, true));
+             });
+             iv.appendChild(it); wrapper.appendChild(iv); wrapper.appendChild(idots);
+             
+             setTimeout(() => {
+                 const trackEl = document.getElementById(`track_${bid}`);
+                 const viewEl = trackEl ? trackEl.parentElement : null;
+                 const dotsEl = viewEl ? viewEl.nextElementSibling : null;
+                 if(trackEl && viewEl) {
+                     new Carousel(viewEl, trackEl, dotsEl, true, (idx) => ViewState.groupIndices[bid] = idx, ViewState.groupIndices[bid] || 0);
+                 }
+             }, 0);
+         }
+     }
+     return { element: wrapper, promises: refreshPromises };
+  }
+
+  window.renderCard = function(idOrEl, data, brandId) {
+    if(data.number && data.totalGB) {
+        GlobalDataCache[data.number] = { total: data.totalGB, used: data.usedGB, error: data.error };
+        localStorage.setItem(DATA_CACHE_KEY, JSON.stringify(GlobalDataCache));
+    }
+    updateDashboardUI();
+
+    const card = (typeof idOrEl === 'string') ? document.getElementById(idOrEl) : idOrEl;
+    if (!card) return;
+    
+    if(data.number) { card.setAttribute('data-number', data.number); card.setAttribute('data-brand', brandId); }
+    
+    if(brandId === 'feimao') {
+       const isActive = (c) => activeFeimaoNet === c ? 'active' : '';
+       const savedFmState = localStorage.getItem(FM_COLLAPSE_KEY);
+       const isFmCollapsed = savedFmState === 'closed';
+       const contentClass = isFmCollapsed ? 'fm-body-transition hidden' : 'fm-body-transition';
+       const btnClass = isFmCollapsed ? 'fm-collapse-btn collapsed' : 'fm-collapse-btn';
+       
+       card.innerHTML = `
+           <div class="fm-wrapper">
+                <div class="fm-hud-header">
+                    <div class="fm-status-pill"><span class="fm-status-dot"></span>系统在线</div>
+                    <div class="fm-mid-info">
+                        <span class="fm-brand-text">飞猫智联</span>
+                        <div class="${btnClass}" onclick="window.toggleFeimaoGroup(this)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </div>
+                    </div>
+                    <div class="fm-mode-btn">${Icons.Mobile} <span>本机模式</span></div>
+                </div>
+                <div id="fm_content_body" class="${contentClass}">
+                    <div class="fm-alert"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span>请确认当前设备使用飞猫分身卡后再进行切换！</span></div>
+                    <div class="fm-grid">
+                        <div class="fm-card ${isActive('0100')}" data-type="0100" onclick="window.switchFeimao('0100', this)">
+                            <div class="fm-content-wrapper"><div class="fm-text-group"><div class="fm-title-cn">中国电信</div><div class="fm-title-en">CHINA TELECOM</div></div></div><div class="connect-badge"></div>
+                        </div>
+                        <div class="fm-card ${isActive('0200')}" data-type="0200" onclick="window.switchFeimao('0200', this)">
+                             <div class="fm-content-wrapper"><div class="fm-text-group"><div class="fm-title-cn">中国移动</div><div class="fm-title-en">CHINA MOBILE</div></div></div><div class="connect-badge"></div>
+                        </div>
+                        <div class="fm-card ${isActive('0300')}" data-type="0300" onclick="window.switchFeimao('0300', this)">
+                             <div class="fm-content-wrapper"><div class="fm-text-group"><div class="fm-title-cn">中国联通</div><div class="fm-title-en">CHINA UNICOM</div></div></div><div class="connect-badge"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+       return;
+    }
+
+    const config = BRAND_CONFIG[brandId];
+    const total = parseFloat(data.totalGB||0), used = parseFloat(data.usedGB||0), remain = parseFloat(data.remainingGB||0);
+    let pct = total>0 ? (used/total)*100 : 0; if(data.isNanPercent) pct = 100;
+    
+    let visualPct = pct;
+    if (visualPct > 100) visualPct = 100;
+    if (visualPct < 0) visualPct = 0;
+
+    let stTxt='正常在线', stCls='st-ok', valCol='#10b981', themeColor = '#34d399'; 
+    const remainRatio = total > 0 ? remain / total : 0;
+    if (data.error || data.isNanPercent) { stTxt = '数据异常'; stCls = 'st-err'; themeColor = '#f87171'; valCol = '#f87171'; pct = 100; visualPct = 100; } 
+    else if (remain <= 0 && total > 0) { stTxt = '流量耗尽'; stCls = 'st-err'; themeColor = '#f87171'; valCol = '#f87171'; } 
+    else if (remainRatio < 0.1) { stTxt = '流量告急'; stCls = 'st-err'; themeColor = '#f87171'; valCol = '#f87171'; } 
+    else if (remainRatio < 0.2) { stTxt = '流量预警'; stCls = 'st-warn'; themeColor = '#fbbf24'; valCol = '#fbbf24'; }
+    if (total === 0) { stTxt = '暂无数据'; stCls = 'st-err'; themeColor = '#f87171'; valCol = '#f87171'; }
+    
+    const remark = localStorage.getItem('tm_remark_' + data.number) || '';
+    const remarkHtml = remark ? `<span class="tm-c-remark">(${remark})</span>` : '';
+    const refreshBtnId = card.id ? `btn_ref_${card.id}` : `btn_ref_${Math.random().toString(36).substr(2,9)}`;
+
+    const initialEmbedStyle = `left:0%; transform: translate(0%, -50%); background:${themeColor};`;
+
+    card.innerHTML = `
+        <div class="tm-c-row-top">
+            <div class="tm-c-icon" style="background:${config.gradient}">${Icons.Signal}</div>
+            <div class="tm-c-info-col">
+                <div class="tm-c-name-line">
+                    <div class="tm-name-group"><span class="tm-c-name">${config.name}</span><span class="tm-c-remark">${remarkHtml}</span><span class="tm-edit-btn" onclick="window.editRemark('${data.number}')" title="修改备注">${Icons.Edit}</span></div>
+                    <span class="tm-c-status ${stCls}"><span class="status-dot"></span>${stTxt}</span>
+                </div>
+            </div>
+        </div>
+        <div class="tm-c-row-mid">
+            <div class="tm-c-num-group">${renderMaskedNumber(data.number)}</div>
+            <div class="tm-c-actions">
+                <button class="tm-icon-btn" onclick="window.bindCard('${brandId}','${data.number}','${config.label}')" title="修改卡号">${Icons.Edit}</button>
+                <button class="tm-icon-btn del" onclick="window.removeCard('${brandId}','${data.number}')">${Icons.Trash}</button>
+                <button class="tm-icon-btn" id="${refreshBtnId}" onclick="window.triggerRefresh('${card.id}','${data.number}','${brandId}', false)">${Icons.Refresh}</button>
+            </div>
+        </div>
+        <div class="tm-cm-stats-row">
+            <div class="tm-stat-group"><span class="tm-cm-label">已用流量</span><span class="tm-cm-val" style="color:#60a5fa">${used.toFixed(2)}<span class="tm-cm-unit">GB</span></span></div>
+            <div class="tm-stat-group right"><span class="tm-cm-label">剩余流量</span><span class="tm-cm-val" style="color:${valCol}">${remain.toFixed(2)}<span class="tm-cm-unit">GB</span></span></div>
+        </div>
+        <div class="tm-cm-bar-bg">
+            <div class="tm-cm-bar-fill" style="width:0%; background-color:${themeColor}"></div>
+            <span class="tm-percent-embed" style="${initialEmbedStyle}">${pct.toFixed(0)}%</span>
+        </div>
+        <div class="tm-cm-footer"><div>有效期: ${data.expireDate||'--'}</div><div style="text-align:center">刷新: ${data.updateTime||'--'}</div><div style="text-align:right">总流量: ${total.toFixed(2)} GB</div></div>`;
+
+    requestAnimationFrame(() => { 
+        setTimeout(() => { 
+            const bar = card.querySelector('.tm-cm-bar-fill'); 
+            const badge = card.querySelector('.tm-percent-embed');
+            if(bar) bar.style.width = visualPct + '%'; 
+            if(badge) {
+                badge.style.left = visualPct + '%';
+                badge.style.transform = `translate(-${visualPct}%, -50%)`;
+            }
+        }, 50); 
+    });
+  };
+
+  function updateDashboardUI() {
+      const keys = Object.keys(GlobalDataCache);
+      let totalGB = 0, usedGB = 0;
+      keys.forEach(k => { const i = GlobalDataCache[k]; if(i && !i.error) { totalGB += parseFloat(i.total)||0; usedGB += parseFloat(i.used)||0; } });
+      const remainGB = totalGB - usedGB;
+      const percent = totalGB > 0 ? ((usedGB/totalGB)*100).toFixed(0) : 0;
+      
+      const today = new Date().getDate();
+      let estimatedDaysStr = '--';
+      if (usedGB > 0 && today > 0) { const avg = usedGB / today; if (avg > 0) estimatedDaysStr = Math.floor((totalGB - usedGB) / avg); if (estimatedDaysStr > 999) estimatedDaysStr = '999+'; } else if (totalGB - usedGB > 0) estimatedDaysStr = '30+';
+
+      const usedEl = document.getElementById('dashboard_used');
+      if(usedEl) {
+          window.animateValue('dashboard_used', parseFloat(usedEl.innerText)||0, usedGB, 1000);
+          window.animateValue('dashboard_remain', parseFloat(document.getElementById('dashboard_remain').innerText)||0, remainGB, 1000);
+          window.animateValue('dashboard_percent', parseFloat(document.getElementById('dashboard_percent').innerText)||0, percent, 1000);
+          window.animateValue('dashboard_status', parseFloat(document.getElementById('dashboard_status').innerText)||0, keys.length, 1000);
+          document.getElementById('dashboard_used_total').innerHTML = `共 ${totalGB.toFixed(0)} GB`;
+          document.getElementById('dashboard_remain_days').innerHTML = `预计可用 ${estimatedDaysStr} 天`;
+      }
+  }
+  
+  window.addDevice = (bid) => {
+      showInputModal(`新增${BRAND_CONFIG[bid].name}`, '请输入卡号', '', async (val) => {
+         if(!val || !val.trim()) return;
+         if(await Validators[bid](val)) { 
+             if(CardManager.add(bid, val)) { 
+                 ViewState.groupIndices[bid] = CardManager.getList(bid).length - 1; 
+                 window.switchView(bid);
+                 updateMenuButtonVisibility();
+                 showToast('添加成功'); 
+             } else showToast('已存在', 'error'); 
+         } else showToast('验证失败', 'error');
+      });
+  };
+
+  window.editRemark = (num) => {
+      const current = localStorage.getItem('tm_remark_' + num) || '';
+      showInputModal('设置备注', '输入备注 (留空可清除)', current, (val) => {
+          const cleanVal = val ? val.trim() : '';
+          if (cleanVal === '') localStorage.removeItem('tm_remark_' + num); else localStorage.setItem('tm_remark_' + num, cleanVal);
+          const cards = document.querySelectorAll(`[id^="card_"][data-number="${num}"]`);
+          cards.forEach(card => { const rs = card.querySelector('.tm-c-remark'); if(rs) rs.innerHTML = cleanVal ? `(${cleanVal})` : ''; });
+          showToast('备注已保存');
+      });
+  };
+
+  window.bindCard = (bid, oldN, lbl) => {
+      showInputModal(`修改${lbl}`, '新号码', oldN, async (newN) => { 
+          if(!newN || !newN.trim()) return;
+          if(await Validators[bid](newN)) { CardManager.update(bid, oldN, newN); window.switchView(bid); showToast('修改成功'); } else showToast('验证失败','error'); 
+      });
+  };
+
+  window.removeCard = (bid, num) => showConfirmModal('删除确认', `确定移除 ${num}?`, () => { CardManager.remove(bid, num); showToast('已移除'); });
+
+  window.triggerRefresh = (id, num, bid, silent = true) => {
+     const btn = id ? document.getElementById(`btn_ref_${id}`) : null;
+     if(btn) { btn.style.opacity = '0.6'; const svg = btn.querySelector('svg'); if(svg) svg.classList.add('tm-spin'); }
+     const minTime = new Promise(r => setTimeout(r, 500));
+     return new Promise(resolve => {
+         const done = (ok, d={}) => { 
+             minTime.then(() => {
+                 renderCard(id, {...d, number:num, updateTime:getNow(), error:!ok}, bid);
+                 const newBtn = id ? document.getElementById(`btn_ref_${id}`) : null;
+                 if(newBtn) { newBtn.style.opacity = '1'; const newSvg = newBtn.querySelector('svg'); if(newSvg) newSvg.classList.remove('tm-spin'); }
+                 if(!silent) { if(ok) showToast('刷新成功'); else showToast('刷新失败', 'error'); }
+                 resolve({ success: ok, brand: BRAND_CONFIG[bid].name, number: num });
+             });
+         };
+         if(bid=='xj') fetchXjSingle(num).then(d=>done(d.s, d)).catch(()=>done(false));
+         else if(bid=='obn') fetchObnSingle(num).then(d=>done(d.s, d));
+         else if(bid=='yunshang') fetchYunshangSingle(num).then(d=>done(d.s, d));
+         else if(bid=='zimu') fetchZimuSingle(num).then(d=>done(d.s, d));
+         else if(bid=='qilianmao') fetchQilianmaoSingle(num).then(d=>done(d.s, d));
+         else if(bid=='old_xj') fetchOldXjSingle(num).then(d=>done(d.s, d));
+         else done(true); 
+     });
+  };
+  
+  async function refreshAllExistingCards() {
+      const promises = [];
+      Object.keys(BRAND_CONFIG).forEach(bid => {
+          if (bid === 'overview' || bid === 'feimao') return;
+          const list = CardManager.getList(bid);
+          list.forEach(num => {
+              const domId = `card_${bid}_${num}`;
+              const el = document.getElementById(domId);
+              promises.push(window.triggerRefresh(el ? domId : null, num, bid, true));
+          });
+      });
+      return Promise.all(promises);
+  }
+
+  const fetchWithTimeout = (url, opts={}, t=8000) => Promise.race([fetch(url,opts), new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),t))]);
+  const getNow = () => new Date().toTimeString().slice(0,8);
+  const Validators = {
+      xj: async(n)=>{try{const d=new URLSearchParams();d.append('card',n);const r=await fetchWithTimeout("/api/proxy/--http://xjxj.iot889.cn/app/card/login",{method:'POST',body:d}); return r.ok;}catch{return /^\d{11,13}$/.test(n);}},
+      obn: (n)=>new Promise(r=>{if(!/^\d{10}$/.test(n))return r(false);const c=`cb_${Date.now()}`;const t=setTimeout(()=>r(false),5000);window[c]=x=>{clearTimeout(t);r(x.code===1);};const s=document.createElement('script');s.src=`http://wifi.zhongtianiot.com/api/card/intelligentDetection?dev_no=${n}&callback=${c}`;document.head.appendChild(s);}),
+      feimao:()=>true, old_xj: async(n)=>(await(await fetch("/api/proxy/--http://xj.iot998.cn/app/simCard/phoneSimCard?card="+n)).json())?.data,
+      zimu: async(n)=>{const f=new FormData();f.append('cardNo',n);return (await(await fetch("/api/proxy/--http://cmp.xinghaiwaimai.com/java/front/cmpCard/cardLogin",{method:'POST',body:f})).json())?.data},
+      yunshang: async(n)=>(await(await fetch(`/api/proxy/--http://aaa.ghy6.com/app/simCard/phoneSimCard?card=${n}`)).json())?.data,
+      qilianmao: async(n)=>(await(await fetch(`/api/proxy/--https://tradeapp.youpin5g.net/dev-app/app/apply/simCardByNum?number=${n}`,{headers:{"User-Agent":"Mozilla/5.0"}})).json())?.data?.simCard
+  };
+  async function fetchXjSingle(n){try{const d=new URLSearchParams();d.append('card',n);const r=await fetch("/api/proxy/--http://xjxj.iot889.cn/app/card/login",{method:'POST',body:d});const ck=r.headers.get('kano-setck')?.split(';')[0];const r2=await fetch("/api/proxy/--http://xjxj.iot889.cn/app/client/card/get",{headers:{"Kano-Cookie":ck}});const j=(await r2.json()).data;return{s:true,totalGB:(j.realUsed+j.free)/1024,usedGB:j.realUsed/1024,remainingGB:j.free/1024,expireDate:j.expirationTime?.split(' ')[0]};}catch{return{s:false};}}
+  async function fetchObnSingle(n){return new Promise(rs=>{const c=`ob_${n}_${Date.now()}`;window[c]=d=>{if(d.code==1){const t=d.data;rs({s:true,totalGB:t.totalAmount/1024,usedGB:(t.totalAmount-t.surplus)/1024,remainingGB:t.surplus/1024,expireDate:t.expiretime?.split(' ')[0]});}else rs({s:false});};const s=document.createElement('script');s.src=`http://wifi.zhongtianiot.com/api/card/intelligentDetection?dev_no=${n}&callback=${c}`;document.head.appendChild(s);});}
+  async function fetchYunshangSingle(n){try{const j=(await(await fetch(`/api/proxy/--http://aaa.ghy6.com/app/simCard/phoneSimCard?card=${n}`)).json());if(j.code==10)throw 1;const d=j.data;return{s:true,totalGB:d.sumFlow/1024,usedGB:d.consumeFlow/1024,remainingGB:(d.sumFlow-d.consumeFlow)/1024,expireDate:d.mealEndTime?.split(' ')[0]};}catch{return{s:false};}}
+  async function fetchZimuSingle(n){try{const f=new FormData();f.append('cardNo',n);const j=(await(await fetch("/api/proxy/--http://cmp.xinghaiwaimai.com/java/front/cmpCard/cardLogin",{method:'POST',body:f})).json());const c=j.data.card;return{s:true,totalGB:c.voidTotalFlow/1024,usedGB:c.voidUsedFlow/1024,remainingGB:(c.voidTotalFlow-c.voidUsedFlow)/1024,expireDate:c.becomedueDatetime?.split('T')[0]};}catch{return{s:false};}}
+  async function fetchOldXjSingle(n){try{const j=(await(await fetch(`/api/proxy/--http://xj.iot998.cn/app/simCard/phoneSimCard?card=${n}`)).json());const d=j.data;return{s:true,totalGB:d.sumFlow/1024,usedGB:d.consumeFlow/1024,remainingGB:(d.sumFlow-d.consumeFlow)/1024,expireDate:d.maxEndTime?.split(' ')[0]};}catch{return{s:false};}}
+  async function fetchQilianmaoSingle(n){try{const j=(await(await fetch(`/api/proxy/--https://tradeapp.youpin5g.net/dev-app/app/apply/simCardByNum?number=${n}`,{headers:{"User-Agent":"Mozilla/5.0"}})).json());const s=j.data.simCard; let dateStr = '--'; if(s.packEndDate) { const d = new Date(s.packEndDate * 1000); dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; } return{s:true,totalGB:s.totalFlow/1024,usedGB:s.usedFlow/1024,remainingGB:s.surplusFlow/1024,expireDate:dateStr};}catch{return{s:false};}}
+  window.switchFeimao = (code, el) => { let netName = '未知网络'; if(code === '0100') netName = '电信网络'; if(code === '0200') netName = '移动网络'; if(code === '0300') netName = '联通网络'; window.confirmFeimaoSwitch(netName, code, el); };
+  window.executeFeimaoSwitch = async (code, element) => { 
+      showToast('正在下发切换指令...', 'loading');
+      const cards = document.querySelectorAll('.fm-card'); cards.forEach(c => c.style.opacity = '0.5'); 
+      setTimeout(async () => { 
+          if(typeof login !== 'function') { alert('环境依赖缺失'); return; } 
+          try { 
+              const loginRes = await login(); 
+              const res = await postData(loginRes, { "goformId": "ENABLE_PIN", "OldPinNumber": code }); 
+              const json = await res.json(); 
+              if (json.result == "success") { 
+                  showToast('指令下发成功，请等待网络重连', 'success'); 
+                  cards.forEach(c => c.classList.remove('active')); 
+                  if(element) element.classList.add('active'); 
+                  activeFeimaoNet = code; 
+              } else { showToast('切换失败，请重试', 'error'); } 
+          } catch (e) { showToast('请求异常', 'error'); } 
+          finally { cards.forEach(c => c.style.opacity = '1'); } 
+      }, 800); 
+  };
+
+  document.getElementById('refresh_all_btn').onclick = function() { 
+      const btn = this; const svg = btn.querySelector('svg');
+      if(svg) svg.classList.add('tm-spin'); btn.style.opacity = '0.6';
+      showToast('正在刷新中...', 'loading'); 
+
+      const els = ['dashboard_used', 'dashboard_remain', 'dashboard_percent', 'dashboard_status'];
+      els.forEach(id => { const el = document.getElementById(id); if(el) el.innerHTML = '0'; });
+      
+      refreshAllExistingCards().then((results) => { 
+          if(svg) svg.classList.remove('tm-spin'); btn.style.opacity = '1'; 
+          if(!results || results.length === 0) { showToast('全部刷新完成'); return; }
+          const fails = results.filter(r => !r.success);
+          if (fails.length === 0) { showToast('全部刷新完成'); } else { const summary = fails.slice(0, 2).map(f => `${f.brand}:${f.number}`).join(', '); const suffix = fails.length > 2 ? ` 等${fails.length}个失败` : ' 刷新失败'; showToast(`${summary}${suffix}`, 'error'); }
+      }); 
+  };
+  
+  const toggle = document.getElementById('collapse_toggle'); const main = document.getElementById('collapse_main'); const header = document.querySelector('.tm-header-block'); const savedState = localStorage.getItem(COLLAPSE_KEY);
+  if (savedState === 'closed') { toggle.checked = false; main.classList.add('collapsed'); main.style.height = '0'; main.style.opacity = '0'; header.classList.add('is-collapsed'); } else { toggle.checked = true; main.classList.remove('collapsed'); main.style.height = 'auto'; main.style.opacity = '1'; header.classList.remove('is-collapsed'); }
+  toggle.onchange = function() { if(this.checked){ main.classList.remove('collapsed'); main.style.height='auto'; main.style.opacity='1'; header.classList.remove('is-collapsed'); localStorage.setItem(COLLAPSE_KEY, 'open'); } else { main.classList.add('collapsed'); main.style.height='0'; main.style.opacity='0'; header.classList.add('is-collapsed'); localStorage.setItem(COLLAPSE_KEY, 'closed'); } };
+  
+  updateMenuButtonVisibility(); 
+  if (!BRAND_CONFIG[ViewState.currentView]) ViewState.currentView = 'overview';
+  window.switchView(ViewState.currentView);
+
+  if(ViewState.currentView === 'overview') {
+      let hasCards = false;
+      Object.keys(BRAND_CONFIG).forEach(bid => { if(CardManager.getList(bid).length > 0) hasCards = true; });
+  }
+
+})();
+</script>
